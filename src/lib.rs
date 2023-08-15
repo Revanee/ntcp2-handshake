@@ -164,15 +164,9 @@ mod tests {
 
     const SESSION_REQUEST_OPTIONS_B64: &str = "AAIAEACAAAAAAAAAAAAAAA==";
 
-    const TEST_OPTIONS: crate::ntcp2::data::Options = crate::ntcp2::data::Options {
-        id: 0,
-        ver: 2,
-        pad_len: [0, 16],
-        m3p2_len: [0, 128],
-        rsvd: [0, 0],
-        tsa: [0, 0, 0, 0],
-        reserved: [0, 0, 0, 0],
-    };
+    fn test_options() -> crate::ntcp2::session_request::Options {
+        crate::ntcp2::session_request::Options::new(0, 16, 128, 0)
+    }
 
     struct TestData {
         public_key: [u8; 32],
@@ -262,7 +256,7 @@ mod tests {
     #[test]
     fn options_encoding_and_decoding() {
         let expected_options_bytes = get_test_data().session_request_options;
-        let expectes_options = crate::ntcp2::data::Options::from(expected_options_bytes);
+        let expectes_options = crate::ntcp2::session_request::Options::from(expected_options_bytes);
 
         assert_eq!(
             expectes_options.to_bytes(),
@@ -271,7 +265,7 @@ mod tests {
         );
 
         assert_eq!(
-            TEST_OPTIONS.to_bytes(),
+            test_options().to_bytes(),
             expected_options_bytes,
             "Test Options bytes should be the same as cached Options bytes"
         );
@@ -281,7 +275,7 @@ mod tests {
     fn test_create_noise() {
         let test_data = get_test_data();
         // let ephemeral_key = test_data.public_key;
-        let options = TEST_OPTIONS;
+        let options = test_options();
         // let padding = [0u8; 16];
 
         // let session_request = crate::ntcp2::UnencryptedSessionRequest {

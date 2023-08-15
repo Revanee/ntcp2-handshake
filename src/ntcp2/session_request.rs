@@ -46,18 +46,28 @@ use std::array::TryFromSliceError;
 /// ~         padding (optional)            ~
 /// |     length defined in options block   |
 /// +----+----+----+----+----+----+----+----+
-#[derive(Debug)]
-pub struct SessionRequest<'a> {
+#[derive(Debug, Clone)]
+pub struct SessionRequest {
+    buf: Vec<u8>,
+}
+
+impl SessionRequest {
     /// 32 bytes, AES-256-CBC encrypted X25519 ephemeral key, little endian
     /// key: RH_B
     /// iv: As published in Bobs network database entry
-    x: [u8; 32],
+    pub fn x(&self) -> [u8; 32] {
+        self.buf[0..32].try_into().expect("failed to get x")
+    }
 
     /// ChaChaPoly frame (32 bytes)
     /// k defined in KDF for message 1
     /// n = 0                         
     /// see KDF for associated data   
-    _chachapoly_frame: [u8; 32],
+    pub fn chachapoly_frame(&self) -> [u8; 32] {
+        self.buf[32..64]
+            .try_into()
+            .expect("failed to get chachapoly_frame")
+    }
 
     /// Random data, 0 or more bytes.
     /// Total message length must be 65535 bytes or less.
@@ -67,32 +77,28 @@ pub struct SessionRequest<'a> {
     /// Alice and Bob will use the padding data in the KDF for message 2.
     /// It is authenticated so that any tampering will cause the
     /// next message to fail.
-    padding: &'a [u8],
-}
+    pub fn padding(&self) -> &[u8] {
+        self.buf[64..].as_ref()
+    }
 
-impl SessionRequest<'_> {
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(64 + self.padding.len());
-        buf.extend_from_slice(&self.x);
-        // TODO: Figure out how to get the ChaChaPoly frame
-        buf.extend_from_slice(&[0u8; 32]);
-        buf.extend_from_slice(self.padding);
-        buf
+        self.buf.clone()
     }
 
-    pub fn decrypt(&self) -> UnencryptedSessionRequest {
-        todo!()
+    pub fn as_bytes(&self) -> &[u8] {
+        self.buf.as_slice()
     }
 }
 
-impl<'a> TryFrom<&'a [u8]> for SessionRequest<'a> {
+impl TryFrom<&[u8]> for SessionRequest {
     type Error = TryFromSliceError;
 
-    fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        let x = bytes[0..32].try_into()?;
+        let chachapoly_frame = bytes[32..64].try_into()?;
+        let padding = &bytes[64..];
         Ok(Self {
-            x: bytes[0..32].try_into()?,
-            _chachapoly_frame: bytes[32..64].try_into()?,
-            padding: &bytes[64..],
+            buf: [x, chachapoly_frame, padding].concat(),
         })
     }
 }
@@ -118,13 +124,22 @@ impl<'a> TryFrom<&'a [u8]> for SessionRequest<'a> {
 /// ~               .   .   .               ~
 /// |                                       |
 /// +----+----+----+----+----+----+----+----+
-#[derive(Debug)]
-pub struct UnencryptedSessionRequest<'a> {
+#[derive(Debug, Clone)]
+pub struct UnencryptedSessionRequest {
+    buf: Vec<u8>,
+    pad_len: usize,
+}
+
+impl UnencryptedSessionRequest {
     /// 32 bytes, X25519 ephemeral key, little endian
-    pub x: [u8; 32],
+    pub fn x(&self) -> [u8; 32] {
+        self.buf[0..32].try_into().expect("failed to get x")
+    }
 
     /// options block, 16 bytes, see below
-    pub options: Options,
+    pub fn options(&self) -> Options {
+        Options::try_from(&self.buf[32..48]).expect("failed to get options")
+    }
 
     /// Random data, 0 or more bytes.
     /// Total message length must be 65535 bytes or less.
@@ -134,20 +149,25 @@ pub struct UnencryptedSessionRequest<'a> {
     /// Alice and Bob will use the padding data in the KDF for message 2.
     /// It is authenticated so that any tampering will cause the
     /// next message to fail.
-    pub padding: &'a [u8],
+    pub fn padding(&self) -> &[u8] {
+        self.buf[48..(48 + self.pad_len)].as_ref()
+    }
 }
 
-impl<'a> UnencryptedSessionRequest<'a> {
-    pub fn new(key: [u8; 32], options: Options, padding: &'a [u8]) -> Self {
+impl UnencryptedSessionRequest {
+    pub fn new(key: [u8; 32], options: Options, padding: &[u8]) -> Self {
         Self {
-            x: key,
-            options,
-            padding,
+            buf: [key.as_slice(), options.to_bytes().as_slice(), padding].concat(),
+            pad_len: padding.len(),
         }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        [self.x.as_slice(), &self.options.to_bytes(), self.padding].concat()
+        self.buf.clone()
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.buf.as_slice()
     }
 }
 
@@ -158,107 +178,99 @@ impl<'a> UnencryptedSessionRequest<'a> {
 /// +----+----+----+----+----+----+----+----+
 /// |        tsA        |   Reserved (0)    |
 /// +----+----+----+----+----+----+----+----+
-#[derive(Debug)]
-pub struct Options {
+#[derive(Debug, Clone, Copy)]
+pub struct Options([u8; 16]);
+
+impl Options {
+    pub fn new(network_id: u8, pad_len: u16, m3p2_len: u16, tsa: u32) -> Self {
+        let rsvd = [0u8; 2];
+        let reserved = [0u8; 4];
+        let ver: u8 = 2;
+        Self(
+            [
+                network_id.to_be_bytes().as_slice(),
+                ver.to_be_bytes().as_slice(),
+                pad_len.to_be_bytes().as_slice(),
+                m3p2_len.to_be_bytes().as_slice(),
+                rsvd.as_slice(),
+                tsa.to_be_bytes().as_slice(),
+                reserved.as_slice(),
+            ]
+            .concat()
+            .try_into()
+            .expect("failed to construct options"),
+        )
+    }
+
     /// 1 byte, the network ID (currently 2, except for test networks)
     /// As of 0.9.42. See proposal 147.
-    pub id: u8,
+    pub fn id(&self) -> u8 {
+        self.0[0]
+    }
 
     /// 1 byte, protocol version (currently 2)
-    pub ver: u8,
+    pub fn ver(&self) -> u8 {
+        self.0[1]
+    }
 
     /// 2 bytes, length of the padding, 0 or more
     /// Min/max guidelines TBD. Random size from 0 to 31 bytes minimum?
     /// (Distribution is implementation-dependent)
-    pub pad_len: [u8; 2],
+    pub fn pad_len(&self) -> [u8; 2] {
+        self.0[2..4].try_into().expect("failed to get pad_len")
+    }
 
     /// 2 bytes, length of the the second AEAD frame in SessionConfirmed
     /// (message 3 part 2) See notes below
-    pub m3p2_len: [u8; 2],
+    pub fn m3p2_len(&self) -> [u8; 2] {
+        self.0[4..6].try_into().expect("failed to get m3p2_len")
+    }
 
     /// 2 bytes, set to 0 for compatibility with future options
-    pub rsvd: [u8; 2],
+    pub fn rsvd(&self) -> [u8; 2] {
+        self.0[6..8].try_into().expect("failed to get rsvd")
+    }
 
     /// 4 bytes, Unix timestamp, unsigned seconds.
     /// Wraps around in 2106
-    pub tsa: [u8; 4],
+    pub fn tsa(&self) -> [u8; 4] {
+        self.0[8..12].try_into().expect("failed to get tsa")
+    }
 
     /// 4 bytes, set to 0 for compatibility with future options
-    pub reserved: [u8; 4],
-}
-
-impl Options {
-    pub fn new() -> Self {
-        let router_info_len: u16 = 1337;
-        let seconds = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("failed to read the time")
-            .as_secs();
-        let pad_len = [0u8; 2];
-        let m3p2_len = router_info_len.to_be_bytes();
-        let tsa: [u8; 4] = match seconds.to_be_bytes() {
-            [.., a, b, c, d] => [a, b, c, d],
-        };
-        let reserved = [0u8; 4];
-        Self {
-            id: 2,
-            ver: 2,
-            pad_len,
-            m3p2_len,
-            rsvd: [0, 0],
-            tsa,
-            reserved,
-        }
+    pub fn reserved(&self) -> [u8; 4] {
+        self.0[12..16].try_into().expect("failed to get reserved")
     }
 
     pub fn to_bytes(&self) -> [u8; 16] {
-        [
-            self.id,
-            self.ver,
-            self.pad_len[0],
-            self.pad_len[1],
-            self.m3p2_len[0],
-            self.m3p2_len[1],
-            self.rsvd[0],
-            self.rsvd[1],
-            self.tsa[0],
-            self.tsa[1],
-            self.tsa[2],
-            self.tsa[3],
-            self.reserved[0],
-            self.reserved[1],
-            self.reserved[2],
-            self.reserved[3],
-        ]
+        self.0
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_ref()
     }
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self::new()
+        let seconds = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("failed to read the time")
+            .as_secs();
+        Self::new(2, 0, 0, seconds as u32)
     }
 }
 
 impl From<[u8; 16]> for Options {
     fn from(bytes: [u8; 16]) -> Self {
-        let mut pad_len = [0u8; 2];
-        pad_len.copy_from_slice(&bytes[2..4]);
-        let mut m3p2_len = [0u8; 2];
-        m3p2_len.copy_from_slice(&bytes[4..6]);
-        let mut rsvd = [0u8; 2];
-        rsvd.copy_from_slice(&bytes[6..8]);
-        let mut tsa = [0u8; 4];
-        tsa.copy_from_slice(&bytes[8..12]);
-        let mut reserved = [0u8; 4];
-        reserved.copy_from_slice(&bytes[12..16]);
-        Self {
-            id: bytes[0],
-            ver: bytes[1],
-            pad_len,
-            m3p2_len,
-            rsvd,
-            tsa,
-            reserved,
-        }
+        Self(bytes)
+    }
+}
+
+impl TryFrom<&[u8]> for Options {
+    type Error = TryFromSliceError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        Ok(Self(bytes.try_into()?))
     }
 }
