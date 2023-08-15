@@ -1,6 +1,5 @@
-use super::cipher_state::CipherState;
-
-const HASHLEN: usize = 32;
+use super::{cipher_state::CipherState, hkdf};
+use crate::noise::{hash, HASHLEN};
 
 /// A SymmetricState object contains a CipherState plus ck and h variables.
 /// It is so-named because it encapsulates all the "symmetric crypto" used by Noise.
@@ -18,25 +17,51 @@ pub struct SymmetricState {
 }
 
 impl SymmetricState {
-    /// InitializeSymmetric(protocol_name): Takes an arbitrary-length protocol_name byte sequence (see Section 8). Executes the following steps:
-    /// * If protocol_name is less than or equal to HASHLEN bytes in length, sets h equal to protocol_name with zero bytes appended to make HASHLEN bytes. Otherwise sets h = HASH(protocol_name).
+    /// InitializeSymmetric(protocol_name):
+    /// Takes an arbitrary-length protocol_name byte sequence (see Section 8).
+    /// Executes the following steps:
+    /// * If protocol_name is less than or equal to HASHLEN bytes in length,
+    /// sets h equal to protocol_name with zero bytes appended to make HASHLEN bytes.
+    /// Otherwise sets h = HASH(protocol_name).
     /// * Sets ck = h.
     /// * Calls InitializeKey(empty).
-    pub fn initialize_symmetric(&self) {
-        todo!()
+    pub fn initialize_symmetric(&mut self, protocol_name: &[u8]) {
+        if protocol_name.len() <= HASHLEN {
+            self.h = protocol_name
+                .iter()
+                .chain(std::iter::repeat(&0))
+                .take(HASHLEN)
+                .copied()
+                .collect::<Vec<u8>>()
+                .try_into()
+                .expect("protocol_name length is more than HASHLEN");
+        } else {
+            self.h = hash(protocol_name);
+        }
+
+        self.ck = self.h;
+
+        self.cipher_state.initialize_key(None);
     }
 
     /// MixKey(input_key_material): Executes the following steps:
     /// * Sets ck, temp_k = HKDF(ck, input_key_material, 2).
     /// * If HASHLEN is 64, then truncates temp_k to 32 bytes.
     /// * Calls InitializeKey(temp_k).
-    pub fn mix_key(&self, input_key_material: &[u8]) {
-        todo!()
+    pub fn mix_key(&mut self, input_key_material: &[u8]) {
+        let (ck, temp_k, _) = hkdf(self.ck, input_key_material, 2);
+        self.ck = ck;
+
+        if HASHLEN == 64 {
+            unimplemented!()
+        }
+
+        self.cipher_state.initialize_key(Some(temp_k));
     }
 
     /// MixHash(data): Sets h = HASH(h || data).
-    pub fn mix_hash(&self, data: &[u8]) {
-        todo!()
+    pub fn mix_hash(&mut self, data: &[u8]) {
+        self.h = hash([self.h.as_slice(), data].concat().as_slice());
     }
 
     // MixKeyAndHash(input_key_material): This function is used for handling pre-shared symmetric keys, as described in Section 9. It executes the following steps:
@@ -53,9 +78,15 @@ impl SymmetricState {
         todo!()
     }
 
-    /// EncryptAndHash(plaintext): Sets ciphertext = EncryptWithAd(h, plaintext), calls MixHash(ciphertext), and returns ciphertext. Note that if k is empty, the EncryptWithAd() call will set ciphertext equal to plaintext.
-    pub fn encrypt_and_hash(&self, plaintext: &[u8]) -> Vec<u8> {
-        todo!()
+    /// Sets ciphertext = EncryptWithAd(h, plaintext),
+    /// calls MixHash(ciphertext), and returns ciphertext.
+    /// Note that if k is empty, the EncryptWithAd() call will set ciphertext equal to plaintext.
+    pub fn encrypt_and_hash(&mut self, plaintext: &[u8]) -> Vec<u8> {
+        let ciphertext = self
+            .cipher_state
+            .encrypt_with_ad(self.h.as_slice(), plaintext);
+        self.mix_hash(ciphertext.as_slice());
+        ciphertext
     }
 
     /// DecryptAndHash(ciphertext): Sets plaintext = DecryptWithAd(h, ciphertext), calls MixHash(ciphertext), and returns plaintext. Note that if k is empty, the DecryptWithAd() call will set plaintext equal to ciphertext.

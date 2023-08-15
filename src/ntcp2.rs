@@ -160,6 +160,10 @@ impl<'a> UnencryptedSessionRequest<'a> {
         //     padding: self.padding,
         // }
     }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        [self.x.as_slice(), &self.options.to_bytes(), self.padding].concat()
+    }
 }
 
 /// Options block

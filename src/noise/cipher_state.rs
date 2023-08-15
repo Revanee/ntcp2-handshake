@@ -1,3 +1,5 @@
+use super::encrypt;
+
 /// A CipherState object contains k and n variables,
 /// which it uses to encrypt and decrypt ciphertexts.
 /// During the handshake phase each party has a single CipherState,
@@ -15,8 +17,8 @@ pub struct CipherState {
 
 impl CipherState {
     /// InitializeKey(key): Sets k = key. Sets n = 0.
-    pub fn initialize_key(&mut self, key: [u8; 32]) {
-        self.k = Some(key);
+    pub fn initialize_key(&mut self, key: Option<[u8; 32]>) {
+        self.k = key;
         self.n = 0;
     }
 
@@ -35,8 +37,14 @@ impl CipherState {
     /// EncryptWithAd(ad, plaintext):
     /// If k is non-empty returns ENCRYPT(k, n++, ad, plaintext).
     /// Otherwise returns plaintext.
-    pub fn encrypt_with_ad(&self, ad: &[u8], plaintext: &[u8]) -> Vec<u8> {
-        todo!()
+    pub fn encrypt_with_ad(&mut self, ad: &[u8], plaintext: &[u8]) -> Vec<u8> {
+        match self.k {
+            Some(k) => {
+                self.n += 1;
+                encrypt(k, self.n, ad, plaintext)
+            }
+            None => plaintext.into(),
+        }
     }
 
     /// DecryptWithAd(ad, ciphertext):

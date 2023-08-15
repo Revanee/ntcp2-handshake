@@ -1,5 +1,5 @@
 mod crypto;
-mod noise;
+pub mod noise;
 mod ntcp2;
 mod session_request;
 
@@ -267,22 +267,22 @@ mod tests {
             padding: &padding,
         };
 
-        let encrypted_session_reqeust = unencrypted_session_request.encrypt(
-            &test_data.peer_router_hash,
-            &[0u8; 12],
-            &crate::crypto::AD::Handshake(sha256(&[0u8])),
-        );
-        println!("Encrypted SessionRequest: {:?}", encrypted_session_reqeust);
+        // let encrypted_session_reqeust = unencrypted_session_request.encrypt(
+        //     &test_data.peer_router_hash,
+        //     &[0u8; 12],
+        //     &crate::crypto::AD::Handshake(sha256(&[0u8])),
+        // );
+        // println!("Encrypted SessionRequest: {:?}", encrypted_session_reqeust);
 
-        let expected_session_reqeust =
-            crate::ntcp2::SessionRequest::try_from(test_data.expected_message.as_slice()).unwrap();
+        // let expected_session_reqeust =
+        //     crate::ntcp2::SessionRequest::try_from(test_data.expected_message.as_slice()).unwrap();
 
-        println!("Expected SessionRequest: {:?}", expected_session_reqeust);
-        let unencrypted_expected_session_request = expected_session_reqeust.decrypt();
-        println!(
-            "Expected Unencrypted SessionRequest: {:?}",
-            unencrypted_expected_session_request,
-        );
+        // println!("Expected SessionRequest: {:?}", expected_session_reqeust);
+        // let unencrypted_expected_session_request = expected_session_reqeust.decrypt();
+        // println!(
+        //     "Expected Unencrypted SessionRequest: {:?}",
+        //     unencrypted_expected_session_request,
+        // );
 
         // assert_eq!(
         //     expectes_options.to_bytes(),
@@ -304,6 +304,7 @@ mod tests {
         hasher.finalize().into()
     }
 
+    #[test]
     fn test_create_noise() {
         let test_data = get_test_data();
         let ephemeral_key = test_data.public_key;
@@ -316,18 +317,20 @@ mod tests {
             padding: &padding,
         };
 
-        let cipher_state = CipherState::default();
-        let symmetric_state = SymmetricState::default();
-        let handshake_state = HandshakeState::default();
+        let mut handshake_state = HandshakeState::default();
 
-        let hanshake_patterns = vec![
-            vec!["s".to_owned()],
-            vec!["e".to_owned(), "es".to_owned()],
-            vec!["e".to_owned(), "ee".to_owned()],
-            vec!["s".to_owned(), "se".to_owned()],
-        ];
+        handshake_state.initialize(
+            crate::noise::handshake_state::ntcp2_handshake_pattern(),
+            true,
+            &[],
+            None,
+            None,
+            Some(test_data.peer_public_key),
+            None,
+        );
 
-        handshake_state.initialize(hanshake_patterns, true, &[], None, None, None, None);
-        handshake_state.write_message();
+        let mut buf = [0u8; 256];
+
+        handshake_state.write_message(&session_request.to_bytes(), &mut buf);
     }
 }
