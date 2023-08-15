@@ -136,13 +136,16 @@ mod tests {
         fn generate_keypair() -> KeyPair {
             let b64 = base64::engine::general_purpose::STANDARD;
             // let public = b64.decode(PUBLIC_KEY_B64).unwrap().try_into().unwrap();
-            let private = b64.decode(PRIVATE_KEY_B64).unwrap().try_into().unwrap();
+            // let private = b64.decode(PRIVATE_KEY_B64).unwrap().try_into().unwrap();
             KeyPair::new(
                 [
                     183, 157, 198, 149, 201, 249, 184, 58, 103, 173, 204, 130, 201, 98, 39, 104,
                     44, 7, 10, 125, 221, 214, 115, 254, 192, 182, 73, 229, 216, 53, 125, 50,
                 ],
-                private,
+                [
+                    78, 97, 26, 254, 119, 244, 128, 69, 95, 241, 16, 194, 185, 66, 253, 213, 78,
+                    97, 26, 254, 119, 244, 128, 69, 95, 241, 16, 194, 185, 66, 253, 213,
+                ],
             )
         }
 
@@ -353,10 +356,8 @@ mod tests {
         //     padding: &padding,
         // };
 
-        let mut handshake_state = HandshakeState::<Ntcp2NoiseSuiteFixedRandom>::new(
-            test_data.peer_router_hash,
-            test_data.peer_iv,
-        );
+        let mut handshake_state =
+            HandshakeState::<Ntcp2NoiseSuite>::new(test_data.peer_router_hash, test_data.peer_iv);
 
         handshake_state.initialize(
             crate::noise::handshake_state::ntcp2_handshake_pattern(),
@@ -371,8 +372,7 @@ mod tests {
         let padlen: usize = 16;
         let mut buf = vec![0u8; SESSION_REQUEST_CT_LEN + padlen];
         handshake_state.write_message(&test_data.session_request_options, &mut buf);
-        // handshake_state.write_message(&session_request.options.to_bytes(), &mut buf);
-        // buf[SESSION_REQUEST_CT_LEN..].copy_from_slice(&test_data.cached_random);
+        buf[SESSION_REQUEST_CT_LEN..].copy_from_slice(&test_data.cached_random);
 
         println!("SessionRequest encrypted:\t\t {:?}", &buf);
         println!(

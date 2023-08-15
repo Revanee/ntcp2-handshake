@@ -180,15 +180,17 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
                         }
                         MessagePatternToken::ES => {
                             if self.initiator {
-                                self.symmetric_state.mix_key(&S::dh(
+                                let dh_out = S::dh(
                                     self.e.expect("e must be set"),
                                     self.rs.expect("rs must be set"),
-                                ));
+                                );
+                                self.symmetric_state.mix_key(&dh_out);
                             } else {
-                                self.symmetric_state.mix_key(&S::dh(
-                                    self.s.expect("s must be set"),
-                                    self.re.expect("re must be set"),
-                                ));
+                                unimplemented!()
+                                // self.symmetric_state.mix_key(&S::dh(
+                                //     self.s.expect("s must be set"),
+                                //     self.re.expect("re must be set"),
+                                // ));
                             }
                         }
                         MessagePatternToken::SE => {

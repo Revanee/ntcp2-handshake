@@ -44,8 +44,9 @@ impl<S: NoiseSuite> CipherState<S> {
     pub fn encrypt_with_ad(&mut self, ad: &[u8], plaintext: &[u8]) -> Vec<u8> {
         match self.k {
             Some(k) => {
+                let ciphertext = S::encrypt(k, self.n, ad, plaintext);
                 self.n += 1;
-                S::encrypt(k, self.n, ad, plaintext)
+                ciphertext
             }
             None => plaintext.into(),
         }
