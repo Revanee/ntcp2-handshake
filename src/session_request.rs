@@ -21,18 +21,16 @@
 //!        Bob's static key pair.  The result is hashed along with the old ck to
 //!        derive a new ck and k, and n is set to zero.
 
-use crate::ntcp2::{Options, UnencryptedSessionRequest};
-
-fn session_request() -> Vec<u8> {
-    let peer_router_ident_b64 = "LxOEhFCbJRYIX81sNWnpj0HBQo8k8gaA96VQJeRfaS4=";
-    let peer_router_ident =
-        base64::decode(peer_router_ident_b64).expect("failed to decode peer ident from base64");
-    // This is optimistic. PublicKeyLength could be different that 256 bytes, based on the Certificate
-    let peer_public_key: [u8; 32] = peer_router_ident[0..32]
-        .try_into()
-        .expect("failed to convert peer ident to public key");
-
+fn _session_request() -> Vec<u8> {
     todo!();
+    // let peer_router_ident_b64 = "LxOEhFCbJRYIX81sNWnpj0HBQo8k8gaA96VQJeRfaS4=";
+    // let peer_router_ident =
+    //     base64::decode(peer_router_ident_b64).expect("failed to decode peer ident from base64");
+    // // This is optimistic. PublicKeyLength could be different that 256 bytes, based on the Certificate
+    // let _peer_public_key: [u8; 32] = peer_router_ident[0..32]
+    //     .try_into()
+    //     .expect("failed to convert peer ident to public key");
+
     // let (hash, keypair) = e();
     // let options = Options::new();
     // let padding: Vec<u8> = vec![];

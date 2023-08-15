@@ -89,7 +89,7 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
         re: Option<Key>,
     ) {
         // Note: NTCP2 Handshake is hardcoded for simplicity
-        let protocol_name = crate::NTCP2_NOISE_ID;
+        let protocol_name = crate::ntcp2::NTCP2_NOISE_ID;
         self.symmetric_state
             .initialize_symmetric(protocol_name.as_bytes());
 
@@ -172,7 +172,6 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
                             todo!()
                         }
                         MessagePatternToken::EE => {
-                            todo!();
                             self.symmetric_state.mix_key(&S::dh(
                                 self.e.expect("e must be set"),
                                 self.re.expect("re must be set"),

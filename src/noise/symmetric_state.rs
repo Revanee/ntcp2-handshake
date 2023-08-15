@@ -69,7 +69,7 @@ impl<S: NoiseSuite> SymmetricState<S> {
     // * Calls MixHash(temp_h).
     // * If HASHLEN is 64, then truncates temp_k to 32 bytes.
     // * Calls InitializeKey(temp_k).
-    pub fn mix_key_and_hash(&self, input_key_material: &[u8]) {
+    pub fn mix_key_and_hash(&self, _input_key_material: &[u8]) {
         todo!()
     }
 
@@ -90,7 +90,7 @@ impl<S: NoiseSuite> SymmetricState<S> {
     }
 
     /// DecryptAndHash(ciphertext): Sets plaintext = DecryptWithAd(h, ciphertext), calls MixHash(ciphertext), and returns plaintext. Note that if k is empty, the DecryptWithAd() call will set plaintext equal to ciphertext.
-    pub fn decrypt_and_hash(&self, ciphertext: &[u8]) -> Vec<u8> {
+    pub fn decrypt_and_hash(&self, _ciphertext: &[u8]) -> Vec<u8> {
         todo!()
     }
 

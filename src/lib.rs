@@ -1,64 +1,41 @@
 pub mod noise;
-mod ntcp2;
+pub mod ntcp2;
 mod session_request;
-
-use sha2::Digest;
-use std::io::Read;
-use std::io::Write;
-use std::net::TcpStream;
-
-const NTCP2_MAX_BYTES: u32 = 65537;
-const NTCP2_NOISE_ID: &str = "Noise_XKaesobfse+hs2+hs3_25519_ChaChaPoly_SHA256";
-static SECRET: &[u8] = b"i don't care for fidget spinners";
-const SESSION_REQUEST_CT_LEN: usize = 64;
-
-/// Hyper-basic stream transport receiver. 16-bit BE size followed by payload.
-fn recv(stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
-    let mut msg_len_buf = [0u8; 2];
-    stream
-        .read_exact(&mut msg_len_buf)
-        .expect("failed to reat first 2 bytes");
-    let msg_len = ((msg_len_buf[0] as usize) << 8) + (msg_len_buf[1] as usize);
-    println!("Receiving message of length: {}", msg_len);
-    let mut msg = vec![0u8; msg_len];
-    stream
-        .read_exact(&mut msg[..])
-        .unwrap_or_else(|_| panic!("failed to read message of size {}", msg_len));
-    Ok(msg)
-}
-
-/// Hyper-basic stream transport sender. 16-bit BE size followed by payload.
-fn send(stream: &mut TcpStream, buf: &[u8]) {
-    stream.write_all(buf).unwrap();
-}
-
-fn sha256(input: &[u8]) -> [u8; 32] {
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(input);
-    hasher.finalize().into()
-}
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        net::{SocketAddrV6, TcpStream},
-        sync::Arc,
-    };
+    use std::{net::TcpStream, sync::Arc};
 
     use base64::Engine;
-    use i2p_snow::{resolvers::CryptoResolver, Builder as NoiseBuilder};
-    use rand::{rngs::OsRng, Rng};
+    use i2p_snow::resolvers::CryptoResolver;
 
     use crate::{
         noise::{
-            cipher_state::CipherState,
-            handshake_state::{self, HandshakeState},
+            handshake_state::HandshakeState,
             suite::{NoiseSuite, Ntcp2NoiseSuite, HASHLEN},
-            symmetric_state::SymmetricState,
             Key, KeyPair,
         },
-        recv, send, session_request, NTCP2_NOISE_ID, SESSION_REQUEST_CT_LEN,
+        ntcp2::NTCP2_NOISE_ID,
     };
+    use std::io::Read;
+    use std::io::Write;
+
+    const SESSION_REQUEST_CT_LEN: usize = 64;
+
+    /// Hyper-basic stream transport receiver. 16-bit BE size followed by payload.
+    fn recv(stream: &mut TcpStream, len: usize) -> std::io::Result<Vec<u8>> {
+        println!("Receiving message of length: {}", len);
+        let mut msg = vec![0u8; len];
+        stream
+            .read_exact(&mut msg[..])
+            .unwrap_or_else(|_| panic!("failed to read message of size {}", len));
+        Ok(msg)
+    }
+
+    /// Hyper-basic stream transport sender. 16-bit BE size followed by payload.
+    fn send(stream: &mut TcpStream, buf: &[u8]) {
+        stream.write_all(buf).unwrap();
+    }
 
     #[derive(Clone)]
     struct TestRng {
@@ -80,7 +57,7 @@ mod tests {
             dest.fill_with(|| *i.next().unwrap());
         }
 
-        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+        fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> Result<(), rand::Error> {
             unimplemented!()
         }
     }
@@ -134,7 +111,7 @@ mod tests {
 
     impl NoiseSuite for Ntcp2NoiseSuiteFixedRandom {
         fn generate_keypair() -> KeyPair {
-            let b64 = base64::engine::general_purpose::STANDARD;
+            // let b64 = base64::engine::general_purpose::STANDARD;
             // let public = b64.decode(PUBLIC_KEY_B64).unwrap().try_into().unwrap();
             // let private = b64.decode(PRIVATE_KEY_B64).unwrap().try_into().unwrap();
             KeyPair::new(
@@ -301,53 +278,10 @@ mod tests {
     }
 
     #[test]
-    fn unencrypted_session_request_encoding_and_decoding() {
-        let test_data = get_test_data();
-        let ephemeral_key = test_data.public_key;
-        let options = TEST_OPTIONS;
-        let padding = [0u8; 16];
-
-        let unencrypted_session_request = crate::ntcp2::UnencryptedSessionRequest {
-            x: ephemeral_key,
-            options,
-            padding: &padding,
-        };
-
-        // let encrypted_session_reqeust = unencrypted_session_request.encrypt(
-        //     &test_data.peer_router_hash,
-        //     &[0u8; 12],
-        //     &crate::crypto::AD::Handshake(sha256(&[0u8])),
-        // );
-        // println!("Encrypted SessionRequest: {:?}", encrypted_session_reqeust);
-
-        // let expected_session_reqeust =
-        //     crate::ntcp2::SessionRequest::try_from(test_data.expected_message.as_slice()).unwrap();
-
-        // println!("Expected SessionRequest: {:?}", expected_session_reqeust);
-        // let unencrypted_expected_session_request = expected_session_reqeust.decrypt();
-        // println!(
-        //     "Expected Unencrypted SessionRequest: {:?}",
-        //     unencrypted_expected_session_request,
-        // );
-
-        // assert_eq!(
-        //     expectes_options.to_bytes(),
-        //     expected_options_bytes,
-        //     "Options bytes should be the same as parsed bytes"
-        // );
-
-        // assert_eq!(
-        //     TEST_OPTIONS.to_bytes(),
-        //     expected_options_bytes,
-        //     "Test Options bytes should be the same as cached Options bytes"
-        // );
-    }
-
-    #[test]
     fn test_create_noise() {
         let test_data = get_test_data();
         // let ephemeral_key = test_data.public_key;
-        // let options = TEST_OPTIONS;
+        let options = TEST_OPTIONS;
         // let padding = [0u8; 16];
 
         // let session_request = crate::ntcp2::UnencryptedSessionRequest {
@@ -371,8 +305,8 @@ mod tests {
 
         let padlen: usize = 16;
         let mut buf = vec![0u8; SESSION_REQUEST_CT_LEN + padlen];
-        handshake_state.write_message(&test_data.session_request_options, &mut buf);
-        buf[SESSION_REQUEST_CT_LEN..].copy_from_slice(&test_data.cached_random);
+        handshake_state.write_message(&options.to_bytes(), &mut buf);
+        buf[SESSION_REQUEST_CT_LEN..].copy_from_slice(&test_data.cached_random[..padlen]);
 
         println!("SessionRequest encrypted:\t\t {:?}", &buf);
         println!(
@@ -390,7 +324,9 @@ mod tests {
         println!("Sending message...");
         send(&mut stream, &buf);
         println!("Waiting for response...");
-        let response = recv(&mut stream).expect("failed to receive message");
+        let resp_pad_len = 0;
+        let response =
+            recv(&mut stream, 32 + 32 + resp_pad_len).expect("failed to receive message");
         println!("Got response: {:?}", response);
     }
 }

@@ -24,6 +24,8 @@
 
 use std::array::TryFromSliceError;
 
+pub const NTCP2_NOISE_ID: &str = "Noise_XKaesobfse+hs2+hs3_25519_ChaChaPoly_SHA256";
+
 /// Session Request
 /// +----+----+----+----+----+----+----+----+
 /// |                                       |
@@ -57,7 +59,7 @@ pub struct SessionRequest<'a> {
     /// k defined in KDF for message 1
     /// n = 0                         
     /// see KDF for associated data   
-    chachapoly_frame: [u8; 32],
+    _chachapoly_frame: [u8; 32],
 
     /// Random data, 0 or more bytes.
     /// Total message length must be 65535 bytes or less.
@@ -91,7 +93,7 @@ impl<'a> TryFrom<&'a [u8]> for SessionRequest<'a> {
     fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
         Ok(Self {
             x: bytes[0..32].try_into()?,
-            chachapoly_frame: bytes[32..64].try_into()?,
+            _chachapoly_frame: bytes[32..64].try_into()?,
             padding: &bytes[64..],
         })
     }
@@ -230,6 +232,12 @@ impl Options {
             self.reserved[2],
             self.reserved[3],
         ]
+    }
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

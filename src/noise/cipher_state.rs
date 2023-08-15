@@ -57,7 +57,7 @@ impl<S: NoiseSuite> CipherState<S> {
     /// Otherwise returns ciphertext.
     /// If an authentication failure occurs in DECRYPT()
     /// then n is not incremented and an error is signaled to the caller.
-    pub fn decrypt_with_ad(&self, ad: &[u8], ciphertext: &[u8]) -> Vec<u8> {
+    pub fn decrypt_with_ad(&self, _ad: &[u8], _ciphertext: &[u8]) -> Vec<u8> {
         todo!()
     }
 
