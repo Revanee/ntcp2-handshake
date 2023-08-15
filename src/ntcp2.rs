@@ -24,8 +24,6 @@
 
 use std::array::TryFromSliceError;
 
-use crate::crypto;
-
 /// Session Request
 /// +----+----+----+----+----+----+----+----+
 /// |                                       |
@@ -146,19 +144,6 @@ impl<'a> UnencryptedSessionRequest<'a> {
             options,
             padding,
         }
-    }
-
-    pub fn encrypt(&self, k: &crypto::K, nonce: &crypto::Nonce, ad: &crypto::AD) -> SessionRequest {
-        todo!();
-        // let encrypted: [u8; 64] = crypto::encrypt(k, nonce, ad, &self.x)
-        //     .expect("encryption failed")
-        //     .try_into()
-        //     .expect("invalid length");
-        // SessionRequest {
-        //     x: x_with_chacha[0..32].try_into().expect("invalid length"),
-        //     chachapoly_frame: x_with_chacha[32..64].try_into().expect("invalid length"),
-        //     padding: self.padding,
-        // }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {

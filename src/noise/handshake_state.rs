@@ -1,14 +1,16 @@
 use std::collections::VecDeque;
 
 use super::{
-    cipher_state::CipherState, dh, generate_keypair, symmetric_state::SymmetricState, Key, KeyPair,
-    DHLEN,
+    cipher_state::CipherState,
+    suite::{NoiseSuite, DHLEN},
+    symmetric_state::SymmetricState,
+    Aes256Obfuscator, Key, KeyPair,
 };
 
 /// A HandshakeState object contains a SymmetricState plus DH variables (s, e, rs, re) and a variable representing the handshake pattern. During the handshake phase each party has a single HandshakeState, which can be deleted once the handshake is finished.
 /// A HandshakeState also has variables to track its role, and the remaining portion of the handshake pattern.
-#[derive(Debug, Default, Clone)]
-pub struct HandshakeState {
+#[derive(Debug, Clone)]
+pub struct HandshakeState<S: NoiseSuite> {
     /// s: The local static key pair
     s: Option<KeyPair>,
     /// e: The local ephemeral key pair
@@ -20,16 +22,36 @@ pub struct HandshakeState {
 
     /// initiator: A boolean indicating the initiator or responder role.
     initiator: bool,
+
     /// message_patterns: A sequence of message patterns.
     /// Each message pattern is a sequence of tokens from the set ("e", "s", "ee", "es", "se", "ss").
     /// (An additional "psk" token is introduced in Section 9, but we defer its explanation until then.)
     message_patterns: VecDeque<MessagePattern>,
 
     /// SymmetricState object.
-    symmetric_state: SymmetricState,
+    symmetric_state: SymmetricState<S>,
+
+    /// NTCP2 requires the remote party's router hash and IV for obfuscation
+    pub obfuscator: Aes256Obfuscator,
 }
 
-impl HandshakeState {
+impl<S: NoiseSuite + Default> HandshakeState<S> {
+    pub fn new(peer_router_hash: [u8; 32], peer_iv: [u8; 16]) -> Self {
+        Self {
+            s: Default::default(),
+            e: Default::default(),
+            rs: Default::default(),
+            re: Default::default(),
+            initiator: Default::default(),
+            message_patterns: Default::default(),
+            symmetric_state: Default::default(),
+            obfuscator: Aes256Obfuscator {
+                key: peer_router_hash,
+                iv: peer_iv,
+            },
+        }
+    }
+
     /// Initialize(handshake_pattern, initiator, prologue, s, e, rs, re):
     /// Takes a valid handshake_pattern (see Section 7) and an initiator boolean
     /// specifying this party's role as either initiator or responder.
@@ -120,7 +142,7 @@ impl HandshakeState {
         &mut self,
         payload: &[u8],
         message_buffer: &mut [u8],
-    ) -> Option<(CipherState, CipherState)> {
+    ) -> Option<(CipherState<S>, CipherState<S>)> {
         match self.message_patterns.pop_front() {
             Some(message_pattern) => {
                 let mut buf_index = 0;
@@ -130,10 +152,18 @@ impl HandshakeState {
                             if self.e.is_some() {
                                 panic!("e must be empty");
                             }
-                            self.e = Some(generate_keypair());
+                            self.e = Some(S::generate_keypair());
 
-                            message_buffer[buf_index..buf_index + DHLEN]
-                                .copy_from_slice(&self.e.unwrap().public);
+                            // Obfuscation via AES-256-CBC as per NTCP2 spec
+                            self.obfuscator.obfuscate(
+                                &self.e.unwrap().public,
+                                &mut message_buffer[buf_index..buf_index + DHLEN],
+                            );
+
+                            // // Not needed when using obfuscation
+                            // message_buffer[buf_index..buf_index + DHLEN]
+                            //     .copy_from_slice(&self.e.unwrap().public);
+
                             buf_index += DHLEN;
 
                             self.symmetric_state.mix_hash(&self.e.unwrap().public);
@@ -142,19 +172,20 @@ impl HandshakeState {
                             todo!()
                         }
                         MessagePatternToken::EE => {
-                            self.symmetric_state.mix_key(&dh(
+                            todo!();
+                            self.symmetric_state.mix_key(&S::dh(
                                 self.e.expect("e must be set"),
                                 self.re.expect("re must be set"),
                             ));
                         }
                         MessagePatternToken::ES => {
                             if self.initiator {
-                                self.symmetric_state.mix_key(&dh(
+                                self.symmetric_state.mix_key(&S::dh(
                                     self.e.expect("e must be set"),
                                     self.rs.expect("rs must be set"),
                                 ));
                             } else {
-                                self.symmetric_state.mix_key(&dh(
+                                self.symmetric_state.mix_key(&S::dh(
                                     self.s.expect("s must be set"),
                                     self.re.expect("re must be set"),
                                 ));

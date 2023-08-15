@@ -1,22 +1,22 @@
-use super::{cipher_state::CipherState, hkdf};
-use crate::noise::{hash, HASHLEN};
+use super::{cipher_state::CipherState, suite::NoiseSuite};
+use crate::noise::suite::HASHLEN;
 
 /// A SymmetricState object contains a CipherState plus ck and h variables.
 /// It is so-named because it encapsulates all the "symmetric crypto" used by Noise.
 /// During the handshake phase each party has a single SymmetricState,
 /// which can be deleted once the handshake is finished.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct SymmetricState {
+pub struct SymmetricState<S: NoiseSuite> {
     /// Chaining key of [HASHLEN] bytes
     ck: [u8; HASHLEN],
     /// Hash output of [HASHLEN] bytes
     h: [u8; HASHLEN],
 
     /// CipherState object
-    cipher_state: CipherState,
+    cipher_state: CipherState<S>,
 }
 
-impl SymmetricState {
+impl<S: NoiseSuite> SymmetricState<S> {
     /// InitializeSymmetric(protocol_name):
     /// Takes an arbitrary-length protocol_name byte sequence (see Section 8).
     /// Executes the following steps:
@@ -36,7 +36,7 @@ impl SymmetricState {
                 .try_into()
                 .expect("protocol_name length is more than HASHLEN");
         } else {
-            self.h = hash(protocol_name);
+            self.h = S::hash(protocol_name);
         }
 
         self.ck = self.h;
@@ -49,7 +49,7 @@ impl SymmetricState {
     /// * If HASHLEN is 64, then truncates temp_k to 32 bytes.
     /// * Calls InitializeKey(temp_k).
     pub fn mix_key(&mut self, input_key_material: &[u8]) {
-        let (ck, temp_k, _) = hkdf(self.ck, input_key_material, 2);
+        let (ck, temp_k, _) = S::hkdf(self.ck, input_key_material, 2);
         self.ck = ck;
 
         if HASHLEN == 64 {
@@ -61,7 +61,7 @@ impl SymmetricState {
 
     /// MixHash(data): Sets h = HASH(h || data).
     pub fn mix_hash(&mut self, data: &[u8]) {
-        self.h = hash([self.h.as_slice(), data].concat().as_slice());
+        self.h = S::hash([self.h.as_slice(), data].concat().as_slice());
     }
 
     // MixKeyAndHash(input_key_material): This function is used for handling pre-shared symmetric keys, as described in Section 9. It executes the following steps:
@@ -100,7 +100,7 @@ impl SymmetricState {
     /// * Creates two new CipherState objects c1 and c2.
     /// * Calls c1.InitializeKey(temp_k1) and c2.InitializeKey(temp_k2).
     /// * Returns the pair (c1, c2).
-    pub fn split(&self) -> (CipherState, CipherState) {
+    pub fn split(&self) -> (CipherState<S>, CipherState<S>) {
         todo!()
     }
 }

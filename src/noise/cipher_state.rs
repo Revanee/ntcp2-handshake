@@ -1,4 +1,6 @@
-use super::encrypt;
+use std::marker::PhantomData;
+
+use super::suite::NoiseSuite;
 
 /// A CipherState object contains k and n variables,
 /// which it uses to encrypt and decrypt ciphertexts.
@@ -6,16 +8,18 @@ use super::encrypt;
 /// but during the transport phase each party has two CipherState objects:
 /// one for sending, and one for receiving.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct CipherState {
+pub struct CipherState<S: NoiseSuite> {
     /// A cipher key of 32 bytes (which may be empty).
     /// Empty is a special value which indicates k has not yet been initialized.
     k: Option<[u8; 32]>,
 
     /// An 8-byte (64-bit) unsigned integer nonce.
     n: u64,
+
+    _phantom: PhantomData<S>,
 }
 
-impl CipherState {
+impl<S: NoiseSuite> CipherState<S> {
     /// InitializeKey(key): Sets k = key. Sets n = 0.
     pub fn initialize_key(&mut self, key: Option<[u8; 32]>) {
         self.k = key;
@@ -41,7 +45,7 @@ impl CipherState {
         match self.k {
             Some(k) => {
                 self.n += 1;
-                encrypt(k, self.n, ad, plaintext)
+                S::encrypt(k, self.n, ad, plaintext)
             }
             None => plaintext.into(),
         }

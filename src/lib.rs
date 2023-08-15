@@ -1,4 +1,3 @@
-mod crypto;
 pub mod noise;
 mod ntcp2;
 mod session_request;
@@ -54,7 +53,9 @@ mod tests {
         noise::{
             cipher_state::CipherState,
             handshake_state::{self, HandshakeState},
+            suite::{NoiseSuite, Ntcp2NoiseSuite, HASHLEN},
             symmetric_state::SymmetricState,
+            Key, KeyPair,
         },
         recv, send, session_request, NTCP2_NOISE_ID, SESSION_REQUEST_CT_LEN,
     };
@@ -125,6 +126,48 @@ mod tests {
             choice: &i2p_snow::params::ObfuscChoice,
         ) -> Option<Box<dyn i2p_snow::types::Obfusc + Send>> {
             self.resolver.resolve_obfusc(choice)
+        }
+    }
+
+    #[derive(Clone, Copy, Default)]
+    struct Ntcp2NoiseSuiteFixedRandom;
+
+    impl NoiseSuite for Ntcp2NoiseSuiteFixedRandom {
+        fn generate_keypair() -> KeyPair {
+            let b64 = base64::engine::general_purpose::STANDARD;
+            // let public = b64.decode(PUBLIC_KEY_B64).unwrap().try_into().unwrap();
+            let private = b64.decode(PRIVATE_KEY_B64).unwrap().try_into().unwrap();
+            KeyPair::new(
+                [
+                    183, 157, 198, 149, 201, 249, 184, 58, 103, 173, 204, 130, 201, 98, 39, 104,
+                    44, 7, 10, 125, 221, 214, 115, 254, 192, 182, 73, 229, 216, 53, 125, 50,
+                ],
+                private,
+            )
+        }
+
+        fn dh(key_pair: KeyPair, public_key: Key) -> Key {
+            Ntcp2NoiseSuite::dh(key_pair, public_key)
+        }
+
+        fn encrypt(k: Key, n: u64, ad: &[u8], plaintext: &[u8]) -> Vec<u8> {
+            Ntcp2NoiseSuite::encrypt(k, n, ad, plaintext)
+        }
+
+        fn hash(data: &[u8]) -> [u8; HASHLEN] {
+            Ntcp2NoiseSuite::hash(data)
+        }
+
+        fn hmac_hash(key: Key, data: &[u8]) -> [u8; HASHLEN] {
+            Ntcp2NoiseSuite::hmac_hash(key, data)
+        }
+
+        fn hkdf(
+            chaining_key: [u8; HASHLEN],
+            input_key_material: &[u8],
+            num_outputs: usize,
+        ) -> ([u8; HASHLEN], [u8; HASHLEN], Option<[u8; HASHLEN]>) {
+            Ntcp2NoiseSuite::hkdf(chaining_key, input_key_material, num_outputs)
         }
     }
 
@@ -297,40 +340,57 @@ mod tests {
         // );
     }
 
-    fn sha256(data: &[u8]) -> [u8; 32] {
-        use sha2::Digest;
-        let mut hasher = sha2::Sha256::new();
-        hasher.update(data);
-        hasher.finalize().into()
-    }
-
     #[test]
     fn test_create_noise() {
         let test_data = get_test_data();
-        let ephemeral_key = test_data.public_key;
-        let options = TEST_OPTIONS;
-        let padding = [0u8; 16];
+        // let ephemeral_key = test_data.public_key;
+        // let options = TEST_OPTIONS;
+        // let padding = [0u8; 16];
 
-        let session_request = crate::ntcp2::UnencryptedSessionRequest {
-            x: ephemeral_key,
-            options,
-            padding: &padding,
-        };
+        // let session_request = crate::ntcp2::UnencryptedSessionRequest {
+        //     x: ephemeral_key,
+        //     options,
+        //     padding: &padding,
+        // };
 
-        let mut handshake_state = HandshakeState::default();
+        let mut handshake_state = HandshakeState::<Ntcp2NoiseSuiteFixedRandom>::new(
+            test_data.peer_router_hash,
+            test_data.peer_iv,
+        );
 
         handshake_state.initialize(
             crate::noise::handshake_state::ntcp2_handshake_pattern(),
             true,
             &[],
-            None,
+            Some(KeyPair::new(test_data.public_key, test_data.private_key)),
             None,
             Some(test_data.peer_public_key),
             None,
         );
 
-        let mut buf = [0u8; 256];
+        let padlen: usize = 16;
+        let mut buf = vec![0u8; SESSION_REQUEST_CT_LEN + padlen];
+        handshake_state.write_message(&test_data.session_request_options, &mut buf);
+        // handshake_state.write_message(&session_request.options.to_bytes(), &mut buf);
+        // buf[SESSION_REQUEST_CT_LEN..].copy_from_slice(&test_data.cached_random);
 
-        handshake_state.write_message(&session_request.to_bytes(), &mut buf);
+        println!("SessionRequest encrypted:\t\t {:?}", &buf);
+        println!(
+            "SessionRequest encrypted expected:\t {:?}",
+            &test_data.expected_message
+        );
+
+        // Connect to our server, which is hopefully listening.
+        println!("Establishing TCP connection...");
+        // let mut stream = TcpStream::connect("149.62.244.210:12345").unwrap();
+        // let mut stream = TcpStream::connect("localhost:54321").unwrap();
+        let mut stream = TcpStream::connect("127.0.0.1:12346").unwrap();
+        println!("Connected to TCP");
+
+        println!("Sending message...");
+        send(&mut stream, &buf);
+        println!("Waiting for response...");
+        let response = recv(&mut stream).expect("failed to receive message");
+        println!("Got response: {:?}", response);
     }
 }

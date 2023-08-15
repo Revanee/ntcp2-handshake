@@ -16,6 +16,11 @@ hmac = "0.12.1"
 # Diffie-Hellman
 x25519-dalek = { version = "2.0.0", features = ["static_secrets"] }
 
+# Obfuscation
+aes = "0.8.3"
+cbc = "0.1.2"
+rust-crypto = "0.2.36"
+
 chacha20poly1305 = "0.10.1"
 aead = "0.5.2"
 
@@ -25,4 +30,3 @@ rand = "0.6.4"
 rand_core = "0.6.4"
 
 siphasher = "0.3.10"
-aes = "0.8.3"
