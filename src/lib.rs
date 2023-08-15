@@ -164,7 +164,7 @@ mod tests {
 
     const SESSION_REQUEST_OPTIONS_B64: &str = "AAIAEACAAAAAAAAAAAAAAA==";
 
-    const TEST_OPTIONS: crate::ntcp2::Options = crate::ntcp2::Options {
+    const TEST_OPTIONS: crate::ntcp2::data::Options = crate::ntcp2::data::Options {
         id: 0,
         ver: 2,
         pad_len: [0, 16],
@@ -262,7 +262,7 @@ mod tests {
     #[test]
     fn options_encoding_and_decoding() {
         let expected_options_bytes = get_test_data().session_request_options;
-        let expectes_options = crate::ntcp2::Options::from(expected_options_bytes);
+        let expectes_options = crate::ntcp2::data::Options::from(expected_options_bytes);
 
         assert_eq!(
             expectes_options.to_bytes(),
