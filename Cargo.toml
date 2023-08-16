@@ -30,3 +30,6 @@ rand = "0.6.4"
 rand_core = "0.6.4"
 
 siphasher = "0.3.10"
+
+clap = { version = "4.3.21", features = ["derive", "cargo"] }
+hex = "0.4.3"

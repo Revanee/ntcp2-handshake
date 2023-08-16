@@ -27,9 +27,7 @@ use std::{
     net::TcpStream,
 };
 
-use base64::Engine;
-
-use self::session_request::{Options, UnencryptedSessionRequest};
+use self::session_request::Options;
 
 pub mod session_confirmed;
 pub mod session_created;
@@ -44,7 +42,7 @@ pub fn initiator_handshake(
     peer_router_hash: [u8; 32],
     peer_iv: [u8; 16],
     peer_stream: &mut TcpStream,
-    router_identity: &[u8],
+    router_info: &[u8],
 ) {
     // Initialize NOISE
     let mut noise = crate::noise::handshake_state::HandshakeState::<
@@ -70,7 +68,7 @@ pub fn initiator_handshake(
         let padding = [1, 2, 3];
 
         let session_request_constant_length = crate::ntcp2::session_request::SessionRequest::len();
-        let options = Options::new(2, padding.len() as u16, 0, 0);
+        let options = Options::new(2, padding.len() as u16, router_info.len() as u16 + 16, 0);
 
         let mut message_buffer = vec![0u8; session_request_constant_length];
         noise.write_message(options.as_bytes(), &mut message_buffer);
@@ -112,8 +110,7 @@ pub fn initiator_handshake(
     {
         const NTCP2_MTU: usize = 65535;
         let mut message_buffer = vec![0u8; NTCP2_MTU];
-        // TODO: Write router identity
-        noise.write_message(&[], &mut message_buffer);
+        noise.write_message(router_info, &mut message_buffer);
         send(peer_stream, &message_buffer);
     }
 }
@@ -135,10 +132,7 @@ fn send(stream: &mut TcpStream, buf: &[u8]) {
 
 #[test]
 fn test_initiator_handshake() {
-    const TEST_ROUTER_IDENTITY: &str =
-        "OjlrJgYiBXkPlLR9UkCoIdGJY8DcftjwCmL3PWiIdWhF66ww8nBJL8Pk44+Y+pUGkOv/oZasPd+ejRlhk9nHi0XrrDDycEkvw+Tjj5j6lQaQ6/+hlqw9356NGWGT2ceLReusMPJwSS/D5OOPmPqVBpDr/6GWrD3fno0ZYZPZx4tF66ww8nBJL8Pk44+Y+pUGkOv/oZasPd+ejRlhk9nHi0XrrDDycEkvw+Tjj5j6lQaQ6/+hlqw9356NGWGT2ceLReusMPJwSS/D5OOPmPqVBpDr/6GWrD3fno0ZYZPZx4tF66ww8nBJL8Pk44+Y+pUGkOv/oZasPd+ejRlhk9nHi0XrrDDycEkvw+Tjj5j6lQaQ6/+hlqw9356NGWGT2ceLReusMPJwSS/D5OOPmPqVBpDr/6GWrD3fno0ZYZPZx4tF66ww8nBJL8Pk44+Y+pUGkOv/oZasPd+ejRlhk9nHixeT6yvbOQ77PWve7h3vOyebYGVEYZ6wwbfKnVw/hk45BQAEAAcABAAAAYnpCqoMAg4AAAAAAAAAAAVOVENQMgBABGNhcHM9ATQ7AXM9LFdZQnA2OEdocUVOV2s3TX44Tk41THMxVUU1c0J5Sn5ZaDhaVzB6M3AwUVE9OwF2PQEyOw8AAAAAAAAAAARTU1UyAXwEY2Fwcz0BNDsBaT0sfm5KblRCSHVyZmhuZzBBdTdoM0QwUHNDVjNtRXdvajIxM3huOFVZekF4TT07BWlleHAwPQoxNjkxODM2NzIyOwVpZXhwMT0KMTY5MTgzNjcwNzsFaWV4cDI9CjE2OTE4MzY3MDc7A2loMD0sYmxIby0wZHhGMllSb05LQW90SVdGeHltRjczV0h5dUdZbXBVUnc4WTF5MD07A2loMT0sfmF1MmplNGxFbmtFZnJCdGhJeWljT2d1Y2ZYSmVEa2p4WEJGY1IxMkI3Yz07A2loMj0sZU83T2Y2QlRqcjBGM3czbnVWbThxUkUyMDVqfmVFZzllcGRvNXVFVWFMWT07BWl0YWcwPQo0MDAzNDU1MDk4OwVpdGFnMT0KMzkyMzMwMDEyODsFaXRhZzI9CjIyODgxNTE2MjU7AXM9LExZbVBGTmxRNH5nOGtpdjZ5OE9MR1ZXd2VWNndvMU1pamsxWmpjNk1hazg9OwF2PQEyOwAALARjYXBzPQJMVTsFbmV0SWQ9ATI7DnJvdXRlci52ZXJzaW9uPQYwLjkuNTk75wElj2dF2Qhokil5YH4t768xImr9e49BY8n040W4HAhc2SjzfCqRv6GYThkGOlkjEa6NDcTo04DLpQlB2Xf4BA==";
-
-    let router_identity = base64::decode(TEST_ROUTER_IDENTITY).unwrap();
+    use base64::Engine;
 
     print!("Establishing TCP connection...");
     let mut stream = TcpStream::connect("127.0.0.1:12346").unwrap();
@@ -171,6 +165,6 @@ fn test_initiator_handshake() {
         peer_router_hash,
         peer_iv,
         &mut stream,
-        &router_identity,
+        &[1, 3, 3, 7],
     );
 }

@@ -258,7 +258,7 @@ impl TryFrom<&[u8]> for Options {
 impl Display for Options {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&format!(
-            "Options (id: {}, pad_len: {}, m3p2_len: {}, tsa: {}",
+            "Options (id: {}, pad_len: {}, m3p2_len: {}, tsa: {})",
             self.id(),
             u16::from_be_bytes(self.pad_len()),
             u16::from_be_bytes(self.m3p2_len()),

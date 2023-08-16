@@ -1,6 +1,5 @@
 pub mod noise;
 pub mod ntcp2;
-mod session_request;
 
 #[cfg(test)]
 mod tests {
