@@ -67,6 +67,8 @@ pub fn initiator_handshake(
         noise.write_message(options.as_bytes(), &mut message_buffer);
         // TODO: Padding with random data
         noise.set_h2(vec![]);
+
+        println!("Sending SessionRequest: {}", options);
         send(peer_stream, &message_buffer);
     }
 
@@ -81,10 +83,13 @@ pub fn initiator_handshake(
         noise.read_message(&session_created_frame, &mut message_buffer);
 
         println!("Received noise message: {:?}", message_buffer);
-        let session_created =
+        let session_created_options =
             crate::ntcp2::session_created::Options::try_from(message_buffer.as_slice()).unwrap();
 
-        println!("Received session_created_options: {}", session_created);
+        println!(
+            "Received SessionCreated options: {}",
+            session_created_options
+        );
 
         let session_created_padding_len = 0;
         let session_created_padding_frame =

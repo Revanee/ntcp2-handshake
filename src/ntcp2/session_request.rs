@@ -1,4 +1,4 @@
-use std::array::TryFromSliceError;
+use std::{array::TryFromSliceError, fmt::Display};
 
 /// Session Request
 /// +----+----+----+----+----+----+----+----+
@@ -252,5 +252,19 @@ impl TryFrom<&[u8]> for Options {
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         Ok(Self(bytes.try_into()?))
+    }
+}
+
+impl Display for Options {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!(
+            "Options (id: {}, pad_len: {}, m3p2_len: {}, tsa: {}",
+            self.id(),
+            u16::from_be_bytes(self.pad_len()),
+            u16::from_be_bytes(self.m3p2_len()),
+            u32::from_be_bytes(self.tsa()),
+        ))?;
+
+        Ok(())
     }
 }

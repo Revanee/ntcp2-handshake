@@ -81,19 +81,22 @@ pub struct Options([u8; 16]);
 impl Options {
     /// Reserved :: 10 bytes total, set to 0 for compatibility with future options
     pub fn reserved(&self) -> [u8; 10] {
-        self.0[0..10].try_into().expect("failed to get reserved")
+        [&self.0[0..2], &self.0[4..8], &self.0[12..16]]
+            .concat()
+            .try_into()
+            .expect("failed to get reserved")
     }
     /// 2 bytes, big endian, length of the padding, 0 or more
     /// Min/max guidelines TBD. Random size from 0 to 31 bytes minimum?
     /// (Distribution is implementation-dependent)
     pub fn pad_len(&self) -> u16 {
-        u16::from_be_bytes(self.0[10..12].try_into().expect("failed to get pad_len"))
+        u16::from_be_bytes(self.0[2..4].try_into().expect("failed to get pad_len"))
     }
 
     /// 4 bytes, big endian, Unix timestamp, unsigned seconds.
     /// Wraps around in 2106
     pub fn ts_b(&self) -> u32 {
-        u32::from_be_bytes(self.0[12..16].try_into().expect("failed to get ts_b"))
+        u32::from_be_bytes(self.0[8..12].try_into().expect("failed to get ts_b"))
     }
 }
 
