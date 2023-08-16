@@ -168,6 +168,9 @@ mod tests {
 
     const SESSION_REQUEST_OPTIONS_B64: &str = "AAIAEACAAAAAAAAAAAAAAA==";
 
+    const TEST_ROUTER_IDENTITY: &str =
+        "OjlrJgYiBXkPlLR9UkCoIdGJY8DcftjwCmL3PWiIdWhF66ww8nBJL8Pk44+Y+pUGkOv/oZasPd+ejRlhk9nHi0XrrDDycEkvw+Tjj5j6lQaQ6/+hlqw9356NGWGT2ceLReusMPJwSS/D5OOPmPqVBpDr/6GWrD3fno0ZYZPZx4tF66ww8nBJL8Pk44+Y+pUGkOv/oZasPd+ejRlhk9nHi0XrrDDycEkvw+Tjj5j6lQaQ6/+hlqw9356NGWGT2ceLReusMPJwSS/D5OOPmPqVBpDr/6GWrD3fno0ZYZPZx4tF66ww8nBJL8Pk44+Y+pUGkOv/oZasPd+ejRlhk9nHi0XrrDDycEkvw+Tjj5j6lQaQ6/+hlqw9356NGWGT2ceLReusMPJwSS/D5OOPmPqVBpDr/6GWrD3fno0ZYZPZx4tF66ww8nBJL8Pk44+Y+pUGkOv/oZasPd+ejRlhk9nHixeT6yvbOQ77PWve7h3vOyebYGVEYZ6wwbfKnVw/hk45BQAEAAcABAAAAYnpCqoMAg4AAAAAAAAAAAVOVENQMgBABGNhcHM9ATQ7AXM9LFdZQnA2OEdocUVOV2s3TX44Tk41THMxVUU1c0J5Sn5ZaDhaVzB6M3AwUVE9OwF2PQEyOw8AAAAAAAAAAARTU1UyAXwEY2Fwcz0BNDsBaT0sfm5KblRCSHVyZmhuZzBBdTdoM0QwUHNDVjNtRXdvajIxM3huOFVZekF4TT07BWlleHAwPQoxNjkxODM2NzIyOwVpZXhwMT0KMTY5MTgzNjcwNzsFaWV4cDI9CjE2OTE4MzY3MDc7A2loMD0sYmxIby0wZHhGMllSb05LQW90SVdGeHltRjczV0h5dUdZbXBVUnc4WTF5MD07A2loMT0sfmF1MmplNGxFbmtFZnJCdGhJeWljT2d1Y2ZYSmVEa2p4WEJGY1IxMkI3Yz07A2loMj0sZU83T2Y2QlRqcjBGM3czbnVWbThxUkUyMDVqfmVFZzllcGRvNXVFVWFMWT07BWl0YWcwPQo0MDAzNDU1MDk4OwVpdGFnMT0KMzkyMzMwMDEyODsFaXRhZzI9CjIyODgxNTE2MjU7AXM9LExZbVBGTmxRNH5nOGtpdjZ5OE9MR1ZXd2VWNndvMU1pamsxWmpjNk1hazg9OwF2PQEyOwAALARjYXBzPQJMVTsFbmV0SWQ9ATI7DnJvdXRlci52ZXJzaW9uPQYwLjkuNTk75wElj2dF2Qhokil5YH4t768xImr9e49BY8n040W4HAhc2SjzfCqRv6GYThkGOlkjEa6NDcTo04DLpQlB2Xf4BA==";
+
     fn test_options() -> crate::ntcp2::session_request::Options {
         crate::ntcp2::session_request::Options::new(0, 16, 128, 0)
     }
@@ -347,7 +350,7 @@ mod tests {
             handshake_pattern,
             true,
             &[],
-            None,
+            Some(KeyPair::new(test_data.public_key, test_data.private_key)),
             Some(KeyPair::new(test_data.public_key, test_data.private_key)),
             Some(test_data.peer_public_key),
             None,
@@ -372,25 +375,31 @@ mod tests {
 
         // Send SessionRequest
         {
-            let padding_length = 0;
-            let options = crate::ntcp2::session_request::Options::new(2, 0, 0, 0);
+            let router_info = base64::decode(TEST_ROUTER_IDENTITY).unwrap();
+            let padding = [5, 4, 3, 2, 1];
+            let options = crate::ntcp2::session_request::Options::new(
+                2,
+                padding.len() as u16,
+                router_info.len() as u16 + 16,
+                0,
+            );
 
-            let mut message_buffer = vec![0u8; 64 + padding_length];
+            let mut message_buffer = vec![0u8; 64];
             noise.write_message(options.as_bytes(), &mut message_buffer);
-            noise.set_h2(vec![]);
+            noise.set_h2(padding.into());
 
-            let mut reference_message_buffer = vec![0u8; 64 + padding_length];
+            let mut reference_message_buffer = vec![0u8; 64];
             reference_noise
                 .write_message(options.as_bytes(), &mut reference_message_buffer)
                 .expect("failed to write message");
             reference_noise
-                .set_h_data(2, &[])
+                .set_h_data(2, &padding)
                 .expect("failed to set h data");
 
             assert_eq!(message_buffer, reference_message_buffer);
 
-            // TODO: Padding with random data
             send(&mut peer_stream, &message_buffer);
+            send(&mut peer_stream, &padding);
         }
 
         // Receive SessionCreated
@@ -400,7 +409,9 @@ mod tests {
                 .expect("failed to receive session created");
             println!("Received session_created: {:?}", session_created_frame);
 
-            let mut reference_message_buffer = vec![0u8; 64];
+            const SESSION_CREATED_LEN: usize = 16;
+
+            let mut reference_message_buffer = vec![0u8; SESSION_CREATED_LEN];
             reference_noise
                 .read_message(&session_created_frame, &mut reference_message_buffer)
                 .expect("failed to read message");
@@ -410,24 +421,52 @@ mod tests {
                 reference_message_buffer
             );
 
-            let mut message_buffer = vec![0u8; 16];
+            let mut message_buffer = [0u8; SESSION_CREATED_LEN];
             noise.read_message(&session_created_frame, &mut message_buffer);
 
+            assert_eq!(&message_buffer, reference_message_buffer.as_slice());
+
             println!("Received noise message: {:?}", message_buffer);
-            let session_created =
-                crate::ntcp2::session_created::SessionCreated::from(message_buffer);
+            let session_created_options =
+                crate::ntcp2::session_created::Options::from(message_buffer);
 
-            println!("Received session_created: {:?}", session_created);
+            println!(
+                "Received SessionCreated options: {}",
+                session_created_options
+            );
 
-            let session_created_padding_len = 0;
+            let session_created_padding_len = session_created_options.pad_len() as usize;
             let session_created_padding_frame = recv(&mut peer_stream, session_created_padding_len)
                 .expect("failed to receive padding");
             println!(
                 "Received session_created_padding: {:?}",
                 session_created_padding_frame
             );
+
+            reference_noise
+                .set_h_data(3, &session_created_padding_frame)
+                .unwrap();
+            noise.set_h3(session_created_padding_frame);
         }
-        // let mut message_buffer = [u8; 48];
-        // noise.read_message(&response, &mut message_buffer);
+
+        // Send SessionConfirmed
+        {
+            let router_info = base64::decode(TEST_ROUTER_IDENTITY).unwrap();
+
+            const NTCP2_MTU: usize = 65535;
+            let mut reference_message_buffer = vec![0u8; NTCP2_MTU];
+            let len = reference_noise
+                .write_message(&router_info, &mut reference_message_buffer)
+                .unwrap();
+            println!("Reference NOISE wrote SessionConfirmed of length {}", len);
+
+            let mut message_buffer = vec![0u8; NTCP2_MTU];
+            // TODO: Write router info
+            noise.write_message(&router_info, &mut message_buffer);
+
+            assert_eq!(message_buffer, reference_message_buffer);
+
+            send(&mut peer_stream, &message_buffer);
+        }
     }
 }

@@ -176,7 +176,12 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
                             self.symmetric_state.mix_hash(&self.e.unwrap().public);
                         }
                         MessagePatternToken::S => {
-                            todo!()
+                            let encrypted_e = self
+                                .symmetric_state
+                                .encrypt_and_hash(self.s.unwrap().public.as_ref());
+                            output_buffer[buf_index..buf_index + encrypted_e.len()]
+                                .copy_from_slice(&encrypted_e);
+                            buf_index += encrypted_e.len();
                         }
                         MessagePatternToken::EE => {
                             self.symmetric_state.mix_key(&S::dh(
@@ -200,7 +205,13 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
                             }
                         }
                         MessagePatternToken::SE => {
-                            todo!()
+                            if self.initiator {
+                                let dh = S::dh(self.s.unwrap(), self.re.unwrap());
+                                self.symmetric_state.mix_key(&dh);
+                            } else {
+                                let dh = S::dh(self.e.unwrap(), self.rs.unwrap());
+                                self.symmetric_state.mix_key(&dh);
+                            }
                         }
                         MessagePatternToken::SS => {
                             todo!()
@@ -209,7 +220,10 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
                             todo!()
                         }
                         MessagePatternToken::HS2 => todo!(),
-                        MessagePatternToken::HS3 => todo!(),
+                        MessagePatternToken::HS3 => {
+                            self.symmetric_state
+                                .mix_hash(self.h3.as_ref().expect("h3 must be set"));
+                        }
                     }
                 }
 
@@ -256,8 +270,6 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
                             self.obfuscator
                                 .deobfuscate(obfuscated_re, &mut re_buf)
                                 .expect("failed to deobfuscate");
-
-                            println!("deobfuscated re: {:?}", re_buf);
 
                             self.re =
                                 Some(re_buf.try_into().expect("deobfuscated re has wrong size"));
