@@ -90,8 +90,12 @@ impl<S: NoiseSuite> SymmetricState<S> {
     }
 
     /// DecryptAndHash(ciphertext): Sets plaintext = DecryptWithAd(h, ciphertext), calls MixHash(ciphertext), and returns plaintext. Note that if k is empty, the DecryptWithAd() call will set plaintext equal to ciphertext.
-    pub fn decrypt_and_hash(&self, _ciphertext: &[u8]) -> Vec<u8> {
-        todo!()
+    pub fn decrypt_and_hash(&mut self, ciphertext: &[u8]) -> Vec<u8> {
+        let plaintext = self
+            .cipher_state
+            .decrypt_with_ad(self.h.as_slice(), ciphertext);
+        self.mix_hash(ciphertext);
+        plaintext
     }
 
     /// Split(): Returns a pair of CipherState objects for encrypting transport messages. Executes the following steps, where zerolen is a zero-length byte sequence:

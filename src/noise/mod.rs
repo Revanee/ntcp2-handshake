@@ -43,4 +43,23 @@ impl Aes256Obfuscator {
         self.iv.copy_from_slice(&out[out.len() - 16..]);
         out.len()
     }
+
+    fn deobfuscate(&mut self, obfusctext: &[u8], out: &mut [u8]) -> Result<usize, ()> {
+        let mut cipher = crypto::aes::cbc_decryptor(
+            crypto::aes::KeySize::KeySize256,
+            &self.key,
+            &self.iv,
+            crypto::blockmodes::NoPadding,
+        );
+        let mut input = crypto::buffer::RefReadBuffer::new(obfusctext);
+        let mut output = crypto::buffer::RefWriteBuffer::new(out);
+        match cipher.decrypt(&mut input, &mut output, true) {
+            Ok(_) => {
+                self.iv
+                    .copy_from_slice(&obfusctext[obfusctext.len() - 16..]);
+                Ok(obfusctext.len())
+            }
+            Err(_) => Err(()),
+        }
+    }
 }

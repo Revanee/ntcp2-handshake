@@ -149,6 +149,10 @@ mod tests {
         ) -> ([u8; HASHLEN], [u8; HASHLEN], Option<[u8; HASHLEN]>) {
             Ntcp2NoiseSuite::hkdf(chaining_key, input_key_material, num_outputs)
         }
+
+        fn decrypt(k: Key, n: u64, ad: &[u8], ciphertext: &[u8]) -> Vec<u8> {
+            Ntcp2NoiseSuite::decrypt(k, n, ad, ciphertext)
+        }
     }
 
     const CACHED_RANDOM_B64: &str = "TmEa/nf0gEVf8RDCuUL91Q==";
@@ -245,7 +249,7 @@ mod tests {
         // println!("Sending message...");
         // send(&mut stream, &buf);
         // println!("Waiting for response...");
-        // let response = recv(&mut stream).expect("failed to receive message");
+        // let response = recv(&mut stream, 64).expect("failed to receive message");
         // println!("Got response: {:?}", response);
         // noise_session
         //     .read_message(&response, &mut buf)
@@ -291,8 +295,8 @@ mod tests {
             crate::noise::handshake_state::ntcp2_handshake_pattern(),
             true,
             &[],
-            Some(KeyPair::new(test_data.public_key, test_data.private_key)),
             None,
+            Some(KeyPair::new(test_data.public_key, test_data.private_key)),
             Some(test_data.peer_public_key),
             None,
         );
@@ -322,5 +326,108 @@ mod tests {
         let response =
             recv(&mut stream, 32 + 32 + resp_pad_len).expect("failed to receive message");
         println!("Got response: {:?}", response);
+    }
+
+    #[test]
+    fn test_noise_reference() {
+        // Connect to our server, which is hopefully listening.
+        println!("Establishing TCP connection...");
+        // let mut stream = TcpStream::connect("149.62.244.210:12345").unwrap();
+        // let mut stream = TcpStream::connect("localhost:54321").unwrap();
+        let mut peer_stream = TcpStream::connect("127.0.0.1:12346").unwrap();
+        println!("Connected to TCP");
+
+        let test_data = get_test_data();
+        // Initialize NOISE
+        let mut noise = crate::noise::handshake_state::HandshakeState::<
+            crate::noise::suite::Ntcp2NoiseSuite,
+        >::new(test_data.peer_router_hash, test_data.peer_iv);
+        let handshake_pattern = crate::noise::handshake_state::ntcp2_handshake_pattern();
+        noise.initialize(
+            handshake_pattern,
+            true,
+            &[],
+            None,
+            Some(KeyPair::new(test_data.public_key, test_data.private_key)),
+            Some(test_data.peer_public_key),
+            None,
+        );
+
+        let mut reference_noise = i2p_snow::Builder::with_resolver(
+            NTCP2_NOISE_ID.parse().unwrap(),
+            Box::new(TestCryptoResolver::<TestRng> {
+                rng: Some(TestRng {
+                    bytes: test_data.cached_random.to_vec(),
+                }),
+                resolver: Arc::new(i2p_snow::resolvers::DefaultResolver::default()),
+            }),
+        )
+        .fixed_ephemeral_key_for_testing_only(&test_data.private_key)
+        .local_private_key(&test_data.private_key)
+        .remote_public_key(&test_data.peer_public_key)
+        .aesobfse(&test_data.peer_router_hash, &test_data.peer_iv)
+        .enable_ask()
+        .build_initiator()
+        .unwrap();
+
+        // Send SessionRequest
+        {
+            let padding_length = 0;
+            let options = crate::ntcp2::session_request::Options::new(2, 0, 0, 0);
+
+            let mut message_buffer = vec![0u8; 64 + padding_length];
+            noise.write_message(options.as_bytes(), &mut message_buffer);
+            noise.set_h2(vec![]);
+
+            let mut reference_message_buffer = vec![0u8; 64 + padding_length];
+            reference_noise
+                .write_message(options.as_bytes(), &mut reference_message_buffer)
+                .expect("failed to write message");
+            reference_noise
+                .set_h_data(2, &[])
+                .expect("failed to set h data");
+
+            assert_eq!(message_buffer, reference_message_buffer);
+
+            // TODO: Padding with random data
+            send(&mut peer_stream, &message_buffer);
+        }
+
+        // Receive SessionCreated
+        {
+            const SESSION_CREATED_FRAME_LEN: usize = 64;
+            let session_created_frame = recv(&mut peer_stream, SESSION_CREATED_FRAME_LEN)
+                .expect("failed to receive session created");
+            println!("Received session_created: {:?}", session_created_frame);
+
+            let mut reference_message_buffer = vec![0u8; 64];
+            reference_noise
+                .read_message(&session_created_frame, &mut reference_message_buffer)
+                .expect("failed to read message");
+
+            println!(
+                "Received reference noise message: {:?}",
+                reference_message_buffer
+            );
+
+            let mut message_buffer = vec![0u8; 16];
+            noise.read_message(&session_created_frame, &mut message_buffer);
+
+            println!("Received noise message: {:?}", message_buffer);
+            let session_created =
+                crate::ntcp2::session_created::SessionCreated::from(message_buffer);
+
+            println!("Received session_created: {:?}", session_created);
+
+            let session_created_padding_len = 0;
+            let session_created_padding_frame = recv(&mut peer_stream, session_created_padding_len)
+                .expect("failed to receive padding");
+            println!(
+                "Received session_created_padding: {:?}",
+                session_created_padding_frame
+            );
+        }
+        // let mut message_buffer = [u8; 48];
+        // noise.read_message(&response, &mut message_buffer);
     }
 }

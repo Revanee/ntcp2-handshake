@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, io::Write};
 
 use super::{
     cipher_state::CipherState,
@@ -32,7 +32,11 @@ pub struct HandshakeState<S: NoiseSuite> {
     symmetric_state: SymmetricState<S>,
 
     /// NTCP2 requires the remote party's router hash and IV for obfuscation
-    pub obfuscator: Aes256Obfuscator,
+    obfuscator: Aes256Obfuscator,
+
+    /// NTCP2 modifications
+    h2: Option<Vec<u8>>,
+    h3: Option<Vec<u8>>,
 }
 
 impl<S: NoiseSuite + Default> HandshakeState<S> {
@@ -45,6 +49,8 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
             initiator: Default::default(),
             message_patterns: Default::default(),
             symmetric_state: Default::default(),
+            h2: Default::default(),
+            h3: Default::default(),
             obfuscator: Aes256Obfuscator {
                 key: peer_router_hash,
                 iv: peer_iv,
@@ -140,8 +146,8 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
     /// If there are no more message patterns returns two new CipherState objects by calling Split().
     pub fn write_message(
         &mut self,
-        payload: &[u8],
-        message_buffer: &mut [u8],
+        message: &[u8],
+        output_buffer: &mut [u8],
     ) -> Option<(CipherState<S>, CipherState<S>)> {
         match self.message_patterns.pop_front() {
             Some(message_pattern) => {
@@ -149,15 +155,16 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
                 for token in message_pattern {
                     match token {
                         MessagePatternToken::E => {
-                            if self.e.is_some() {
-                                panic!("e must be empty");
+                            if self.e.is_none() {
+                                self.e = Some(S::generate_keypair());
+                            } else {
+                                println!("WARNING: e must be empty");
                             }
-                            self.e = Some(S::generate_keypair());
 
                             // Obfuscation via AES-256-CBC as per NTCP2 spec
                             self.obfuscator.obfuscate(
                                 &self.e.unwrap().public,
-                                &mut message_buffer[buf_index..buf_index + DHLEN],
+                                &mut output_buffer[buf_index..buf_index + DHLEN],
                             );
 
                             // // Not needed when using obfuscation
@@ -201,11 +208,13 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
                         MessagePatternToken::PSK => {
                             todo!()
                         }
+                        MessagePatternToken::HS2 => todo!(),
+                        MessagePatternToken::HS3 => todo!(),
                     }
                 }
 
-                let data = self.symmetric_state.encrypt_and_hash(payload);
-                message_buffer[buf_index..buf_index + data.len()].copy_from_slice(&data);
+                let data = self.symmetric_state.encrypt_and_hash(message);
+                output_buffer[buf_index..buf_index + data.len()].copy_from_slice(&data);
 
                 None
             }
@@ -213,18 +222,99 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
         }
     }
 
-    /// ReadMessage(message, payload_buffer): Takes a byte sequence containing a Noise handshake message, and a payload_buffer to write the message's plaintext payload into. Performs the following steps, aborting if any DecryptAndHash() call returns an error:
-    /// Fetches and deletes the next message pattern from message_patterns, then sequentially processes each token from the message pattern:
-    /// For "e": Sets re (which must be empty) to the next DHLEN bytes from the message. Calls MixHash(re.public_key).
-    /// For "s": Sets temp to the next DHLEN + 16 bytes of the message if HasKey() == True, or to the next DHLEN bytes otherwise. Sets rs (which must be empty) to DecryptAndHash(temp).
-    /// For "ee": Calls MixKey(DH(e, re)).
-    /// For "es": Calls MixKey(DH(e, rs)) if initiator, MixKey(DH(s, re)) if responder.
-    /// For "se": Calls MixKey(DH(s, re)) if initiator, MixKey(DH(e, rs)) if responder.
-    /// For "ss": Calls MixKey(DH(s, rs)).
+    /// ReadMessage(message, payload_buffer): Takes a byte sequence containing a Noise handshake message,
+    /// and a payload_buffer to write the message's plaintext payload into.
+    /// Performs the following steps, aborting if any DecryptAndHash() call returns an error:
+    /// Fetches and deletes the next message pattern from message_patterns,
+    /// then sequentially processes each token from the message pattern:
+    /// * For "e": Sets re (which must be empty) to the next DHLEN bytes from the message. Calls MixHash(re.public_key).
+    /// * For "s": Sets temp to the next DHLEN + 16 bytes of the message if HasKey() == True,
+    /// or to the next DHLEN bytes otherwise. Sets rs (which must be empty) to DecryptAndHash(temp).
+    /// * For "ee": Calls MixKey(DH(e, re)).
+    /// * For "es": Calls MixKey(DH(e, rs)) if initiator, MixKey(DH(s, re)) if responder.
+    /// * For "se": Calls MixKey(DH(s, re)) if initiator, MixKey(DH(e, rs)) if responder.
+    /// * For "ss": Calls MixKey(DH(s, rs)).
     /// Calls DecryptAndHash() on the remaining bytes of the message and stores the output into payload_buffer.
     /// If there are no more message patterns returns two new CipherState objects by calling Split().
-    pub fn read_message(&self) {
-        todo!()
+    pub fn read_message(
+        &mut self,
+        message: &[u8],
+        mut output_buffer: &mut [u8],
+    ) -> Option<(CipherState<S>, CipherState<S>)> {
+        match self.message_patterns.pop_front() {
+            Some(message_pattern) => {
+                let mut buf_index = 0;
+                for token in message_pattern {
+                    match token {
+                        MessagePatternToken::E => {
+                            if self.re.is_some() {
+                                panic!("re must be empty");
+                            }
+
+                            let obfuscated_re = &message[buf_index..buf_index + DHLEN];
+                            let mut re_buf = vec![0u8; obfuscated_re.len()];
+                            self.obfuscator
+                                .deobfuscate(obfuscated_re, &mut re_buf)
+                                .expect("failed to deobfuscate");
+
+                            println!("deobfuscated re: {:?}", re_buf);
+
+                            self.re =
+                                Some(re_buf.try_into().expect("deobfuscated re has wrong size"));
+                            buf_index += DHLEN;
+
+                            self.symmetric_state.mix_hash(&self.re.unwrap());
+                        }
+                        MessagePatternToken::S => {
+                            todo!()
+                        }
+                        MessagePatternToken::EE => {
+                            let dh = S::dh(
+                                self.e.expect("e must be set"),
+                                self.re.expect("re must be set"),
+                            );
+                            self.symmetric_state.mix_key(&dh);
+                        }
+                        MessagePatternToken::ES => {
+                            todo!()
+                        }
+                        MessagePatternToken::SE => {
+                            todo!()
+                        }
+                        MessagePatternToken::SS => {
+                            todo!()
+                        }
+                        MessagePatternToken::PSK => {
+                            todo!()
+                        }
+                        MessagePatternToken::HS2 => {
+                            self.symmetric_state
+                                .mix_hash(self.h2.as_ref().expect("h2 must be set"));
+                        }
+                        MessagePatternToken::HS3 => {
+                            self.symmetric_state
+                                .mix_hash(self.h3.as_ref().expect("h3 must be set"));
+                        }
+                    }
+                }
+
+                let plaintext = self.symmetric_state.decrypt_and_hash(&message[buf_index..]);
+                output_buffer
+                    .write_all(&plaintext)
+                    .expect("failed to write plaintext to output_buffer");
+
+                None
+            }
+            None => Some(self.symmetric_state.split()),
+        }
+    }
+
+    pub fn set_h2(&mut self, h2: Vec<u8>) {
+        self.h2 = Some(h2);
+    }
+
+    pub fn set_h3(&mut self, h3: Vec<u8>) {
+        self.h3 = Some(h3);
     }
 }
 
@@ -237,6 +327,8 @@ pub enum MessagePatternToken {
     SE,
     SS,
     PSK,
+    HS2,
+    HS3,
 }
 
 #[derive(Debug, Clone)]
@@ -268,8 +360,16 @@ pub fn ntcp2_handshake_pattern() -> HandshakePattern {
         responder_pre_message_pattern: PreMessagePattern::S,
         message_patterns: vec![
             vec![MessagePatternToken::E, MessagePatternToken::ES],
-            vec![MessagePatternToken::E, MessagePatternToken::EE],
-            vec![MessagePatternToken::S, MessagePatternToken::SE],
+            vec![
+                MessagePatternToken::HS2,
+                MessagePatternToken::E,
+                MessagePatternToken::EE,
+            ],
+            vec![
+                MessagePatternToken::HS3,
+                MessagePatternToken::S,
+                MessagePatternToken::SE,
+            ],
         ],
     }
 }

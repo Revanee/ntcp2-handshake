@@ -1,4 +1,4 @@
-use std::array::TryFromSliceError;
+use std::{array::TryFromSliceError, fmt::Display};
 
 /// +----+----+----+----+----+----+----+----+
 /// |                                       |
@@ -19,18 +19,23 @@ use std::array::TryFromSliceError;
 /// ~               .   .   .               ~
 /// |                                       |
 /// +----+----+----+----+----+----+----+----+
+#[derive(Debug, Clone)]
 pub struct SessionCreated {
     buf: Vec<u8>,
 }
 
 impl SessionCreated {
+    pub const fn len() -> usize {
+        64
+    }
+
     /// 32 bytes, X25519 ephemeral key, little endian
     pub fn y(&self) -> [u8; 32] {
         self.buf[0..32].try_into().expect("failed to get y")
     }
 
     /// options block, 16 bytes, see below
-    pub fn options(&self) -> [u8; 16] {
+    pub fn options(&self) -> Options {
         self.buf[32..48].try_into().expect("failed to get options")
     }
 
@@ -41,6 +46,28 @@ impl SessionCreated {
     /// next message to fail.
     pub fn padding(&self) -> &[u8] {
         &self.buf[48..]
+    }
+}
+
+impl From<Vec<u8>> for SessionCreated {
+    fn from(buf: Vec<u8>) -> Self {
+        Self { buf }
+    }
+}
+
+impl Display for SessionCreated {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            format!(
+                "SessionCreated (y: {}, options: {}, padding: {})",
+                base64::encode(self.y()),
+                self.options(),
+                base64::encode(self.padding())
+            )
+            .as_str(),
+        )?;
+
+        Ok(())
     }
 }
 
@@ -81,5 +108,20 @@ impl TryFrom<&[u8]> for Options {
 
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         Ok(Self(buf.try_into()?))
+    }
+}
+
+impl Display for Options {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            format!(
+                "Options (pad_len: {}, ts_b: {})",
+                self.pad_len(),
+                self.ts_b()
+            )
+            .as_str(),
+        )?;
+
+        Ok(())
     }
 }

@@ -35,6 +35,12 @@ pub trait NoiseSuite {
     /// (note that this is an additional requirement that isn't necessarily met by all AEAD schemes).
     fn encrypt(k: Key, n: u64, ad: &[u8], plaintext: &[u8]) -> Vec<u8>;
 
+    /// Decrypts ciphertext using a cipher key k of 32 bytes,
+    /// an 8-byte unsigned integer nonce n, and associated data ad.
+    /// Returns the plaintext, unless authentication fails,
+    /// in which case an error is signaled to the caller.
+    fn decrypt(k: Key, n: u64, ad: &[u8], ciphertext: &[u8]) -> Vec<u8>;
+
     /// Hashes some arbitrary-length data with a collision-resistant
     /// cryptographic hash function and returns an output of HASHLEN bytes.
     fn hash(data: &[u8]) -> [u8; HASHLEN];
@@ -87,6 +93,20 @@ impl NoiseSuite for Ntcp2NoiseSuite {
         let nonce = chacha20poly1305::Nonce::from_slice(&nonce_bytes);
 
         cipher.encrypt(nonce, payload).expect("failed to encrypt")
+    }
+
+    fn decrypt(k: Key, n: u64, ad: &[u8], ciphertext: &[u8]) -> Vec<u8> {
+        use aead::{Aead, KeyInit};
+        let cipher = chacha20poly1305::ChaCha20Poly1305::new(&k.into());
+        let payload = aead::Payload {
+            msg: ciphertext,
+            aad: ad,
+        };
+
+        let nonce_bytes = [&[0u8; 4], n.to_le_bytes().as_slice()].concat();
+        let nonce = chacha20poly1305::Nonce::from_slice(&nonce_bytes);
+
+        cipher.decrypt(nonce, payload).expect("failed to decrypt")
     }
 
     fn hash(data: &[u8]) -> [u8; HASHLEN] {

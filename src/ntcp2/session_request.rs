@@ -1,27 +1,3 @@
-//! The establishment sequence is as follows:
-//!
-//! Alice                           Bob
-//!
-//! SessionRequest ------------------->
-//! <------------------- SessionCreated
-//! SessionConfirmed ----------------->
-//!
-//! Using Noise terminology, the establishment and data sequence is as follows: (Payload Security Properties)
-//!
-//! XK(s, rs):           Authentication   Confidentiality
-//! <- s
-//! ...
-//! -> e, es                  0                2
-//! <- e, ee                  2                1
-//! -> s, se                  2                5
-//! <-                        2                5
-//!
-//! Some notations:
-//!
-//! - RH_A = Router Hash for Alice (32 bytes)
-//! - RH_B = Router Hash for Bob (32 bytes)
-//!
-
 use std::array::TryFromSliceError;
 
 /// Session Request
@@ -52,6 +28,10 @@ pub struct SessionRequest {
 }
 
 impl SessionRequest {
+    pub const fn len() -> usize {
+        64
+    }
+
     /// 32 bytes, AES-256-CBC encrypted X25519 ephemeral key, little endian
     /// key: RH_B
     /// iv: As published in Bobs network database entry
