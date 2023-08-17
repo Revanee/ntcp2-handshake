@@ -71,6 +71,6 @@ fn main() {
                 &[1, 3, 3, 7],
             );
         }
-        Commands::Listen {} => todo!(),
+        Commands::Listen {} => unimplemented!(),
     }
 }

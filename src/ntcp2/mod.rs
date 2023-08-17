@@ -27,6 +27,8 @@ use std::{
     net::TcpStream,
 };
 
+use rand::RngCore;
+
 use self::session_request::SessionRequest;
 
 pub mod session_created;
@@ -66,7 +68,10 @@ pub fn initiator_handshake(
     // Send SessionRequest
     {
         // TODO: Random padding
-        let padding = [1, 2, 3];
+        let mut rng = rand::rngs::OsRng::new().expect("failed to initialize RNG");
+        let padding_len: u8 = rng.next_u32() as u8;
+        let mut padding = vec![0u8; padding_len as usize];
+        rng.fill_bytes(&mut padding);
 
         let options =
             SessionRequest::new(2, padding.len() as u16, router_info.len() as u16 + 16, 0);
@@ -74,7 +79,7 @@ pub fn initiator_handshake(
         let mut message_buffer = vec![0u8; SESSION_REQUEST_FRAME_LEN];
         noise.write_message(options.as_bytes(), &mut message_buffer);
         message_buffer.extend_from_slice(&padding);
-        noise.set_h2(padding.into());
+        noise.set_h2(padding);
 
         println!("Sending SessionRequest: {}", options);
         send(peer_stream, &message_buffer);
