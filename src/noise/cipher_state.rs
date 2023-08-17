@@ -70,6 +70,6 @@ impl<S: NoiseSuite> CipherState<S> {
 
     /// Rekey(): Sets k = REKEY(k).
     pub fn rekey(&mut self) {
-        todo!()
+        unimplemented!()
     }
 }

@@ -29,7 +29,6 @@ use std::{
 
 use self::session_request::SessionRequest;
 
-pub mod session_confirmed;
 pub mod session_created;
 pub mod session_request;
 
@@ -128,43 +127,4 @@ fn recv(stream: &mut TcpStream, len: usize) -> std::io::Result<Vec<u8>> {
 
 fn send(stream: &mut TcpStream, buf: &[u8]) {
     stream.write_all(buf).unwrap();
-}
-
-#[test]
-fn test_initiator_handshake() {
-    use base64::Engine;
-
-    print!("Establishing TCP connection...");
-    let mut stream = TcpStream::connect("127.0.0.1:12346").unwrap();
-    println!(" Connected to TCP");
-
-    let public_key_b64: &str = "Am5NvNyBzK+hqYpbz6Q7CiVg8MU3xWdwwMIHRNiGDhQ=";
-    let private_key_b64: &str = "iFA0BLrP8+nyN+dwVsJuFWsk18EOMI3l5ZO9ftqjFXg=";
-
-    let peer_public_key_b64: &str = "BCfyQoO3xK1nCkWwjYDgrVRjg7Kwtk5yCsli2lOyAhY=";
-    let peer_router_hash_b64: &str = "Bunc8ECK24KZ0FxfLV0/bLTmxaJZeuTXWbSe/8d6AyU=";
-    let peer_iv_b64: &str = "+A4iwdmSHvcbwjtqCsXUXQ==";
-
-    let b64 = base64::engine::general_purpose::STANDARD;
-
-    let public_key = b64.decode(public_key_b64).unwrap().try_into().unwrap();
-    let private_key = b64.decode(private_key_b64).unwrap().try_into().unwrap();
-
-    let peer_public_key = b64.decode(peer_public_key_b64).unwrap().try_into().unwrap();
-    let peer_router_hash = b64
-        .decode(peer_router_hash_b64)
-        .unwrap()
-        .try_into()
-        .unwrap();
-    let peer_iv = b64.decode(peer_iv_b64).unwrap().try_into().unwrap();
-
-    initiator_handshake(
-        public_key,
-        private_key,
-        peer_public_key,
-        peer_router_hash,
-        peer_iv,
-        &mut stream,
-        &[1, 3, 3, 7],
-    );
 }

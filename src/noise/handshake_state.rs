@@ -197,11 +197,10 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
                                 );
                                 self.symmetric_state.mix_key(&dh_out);
                             } else {
-                                unimplemented!()
-                                // self.symmetric_state.mix_key(&S::dh(
-                                //     self.s.expect("s must be set"),
-                                //     self.re.expect("re must be set"),
-                                // ));
+                                self.symmetric_state.mix_key(&S::dh(
+                                    self.s.expect("s must be set"),
+                                    self.re.expect("re must be set"),
+                                ));
                             }
                         }
                         MessagePatternToken::SE => {
@@ -213,13 +212,10 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
                                 self.symmetric_state.mix_key(&dh);
                             }
                         }
-                        MessagePatternToken::SS => {
-                            todo!()
-                        }
-                        MessagePatternToken::PSK => {
-                            todo!()
-                        }
-                        MessagePatternToken::HS2 => todo!(),
+                        MessagePatternToken::SS => unimplemented!(),
+
+                        MessagePatternToken::PSK => unimplemented!(),
+                        MessagePatternToken::HS2 => unimplemented!(),
                         MessagePatternToken::HS3 => {
                             self.symmetric_state
                                 .mix_hash(self.h3.as_ref().expect("h3 must be set"));
@@ -277,9 +273,7 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
 
                             self.symmetric_state.mix_hash(&self.re.unwrap());
                         }
-                        MessagePatternToken::S => {
-                            todo!()
-                        }
+                        MessagePatternToken::S => unimplemented!(),
                         MessagePatternToken::EE => {
                             let dh = S::dh(
                                 self.e.expect("e must be set"),
@@ -287,18 +281,10 @@ impl<S: NoiseSuite + Default> HandshakeState<S> {
                             );
                             self.symmetric_state.mix_key(&dh);
                         }
-                        MessagePatternToken::ES => {
-                            todo!()
-                        }
-                        MessagePatternToken::SE => {
-                            todo!()
-                        }
-                        MessagePatternToken::SS => {
-                            todo!()
-                        }
-                        MessagePatternToken::PSK => {
-                            todo!()
-                        }
+                        MessagePatternToken::ES => unimplemented!(),
+                        MessagePatternToken::SE => unimplemented!(),
+                        MessagePatternToken::SS => unimplemented!(),
+                        MessagePatternToken::PSK => unimplemented!(),
                         MessagePatternToken::HS2 => {
                             self.symmetric_state
                                 .mix_hash(self.h2.as_ref().expect("h2 must be set"));

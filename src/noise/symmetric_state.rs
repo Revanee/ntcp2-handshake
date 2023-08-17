@@ -70,12 +70,12 @@ impl<S: NoiseSuite> SymmetricState<S> {
     // * If HASHLEN is 64, then truncates temp_k to 32 bytes.
     // * Calls InitializeKey(temp_k).
     pub fn mix_key_and_hash(&self, _input_key_material: &[u8]) {
-        todo!()
+        unimplemented!()
     }
 
     /// GetHandshakeHash(): Returns h. This function should only be called at the end of a handshake, i.e. after the Split() function has been called. This function is used for channel binding, as described in Section 11.2
     pub fn get_handshake_hash(&self) -> [u8; HASHLEN] {
-        todo!()
+        unimplemented!()
     }
 
     /// Sets ciphertext = EncryptWithAd(h, plaintext),
@@ -105,6 +105,6 @@ impl<S: NoiseSuite> SymmetricState<S> {
     /// * Calls c1.InitializeKey(temp_k1) and c2.InitializeKey(temp_k2).
     /// * Returns the pair (c1, c2).
     pub fn split(&self) -> (CipherState<S>, CipherState<S>) {
-        todo!()
+        unimplemented!()
     }
 }
