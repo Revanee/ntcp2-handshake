@@ -67,7 +67,6 @@ pub fn initiator_handshake(
 
     // Send SessionRequest
     {
-        // TODO: Random padding
         let mut rng = rand::rngs::OsRng::new().expect("failed to initialize RNG");
         let padding_len: u8 = rng.next_u32() as u8;
         let mut padding = vec![0u8; padding_len as usize];
