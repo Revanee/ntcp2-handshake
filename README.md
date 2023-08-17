@@ -135,6 +135,8 @@ Make note of these values:
 
 All these values are published by I2P nodes and are necessary to establish NTCP2 connections
 
+Note: Make sure to use the NTCP2 port (`12346`) and not the NTCP port (`12345`)
+
 ## NTCP2-HS
 
 ### Building the executable
