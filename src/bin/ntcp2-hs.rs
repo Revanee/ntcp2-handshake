@@ -1,11 +1,7 @@
-use core::panic;
-use std::{
-    fmt::Arguments,
-    net::{SocketAddr, TcpStream},
-};
+use std::net::TcpStream;
 
 use base64::Engine;
-use clap::{arg, command, Command, Parser, Subcommand};
+use clap::{command, Parser, Subcommand};
 use ntcp2_hs::{noise::suite::NoiseSuite, ntcp2::initiator_handshake};
 
 #[derive(Subcommand, Debug)]

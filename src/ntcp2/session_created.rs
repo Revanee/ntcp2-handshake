@@ -1,84 +1,13 @@
 use std::{array::TryFromSliceError, fmt::Display};
 
 /// +----+----+----+----+----+----+----+----+
-/// |                                       |
-/// +                                       +
-/// |                  Y                    |
-/// +              (32 bytes)               +
-/// |                                       |
-/// +                                       +
-/// |                                       |
-/// +----+----+----+----+----+----+----+----+
-/// |               options                 |
-/// +              (16 bytes)               +
-/// |                                       |
-/// +----+----+----+----+----+----+----+----+
-/// |     unencrypted authenticated         |
-/// +         padding (optional)            +
-/// |     length defined in options block   |
-/// ~               .   .   .               ~
-/// |                                       |
-/// +----+----+----+----+----+----+----+----+
-#[derive(Debug, Clone)]
-pub struct SessionCreated {
-    buf: Vec<u8>,
-}
-
-impl SessionCreated {
-    pub const fn len() -> usize {
-        64
-    }
-
-    /// 32 bytes, X25519 ephemeral key, little endian
-    pub fn y(&self) -> [u8; 32] {
-        self.buf[0..32].try_into().expect("failed to get y")
-    }
-
-    /// options block, 16 bytes, see below
-    pub fn options(&self) -> Options {
-        self.buf[32..48].try_into().expect("failed to get options")
-    }
-
-    /// Random data, 0 or more bytes.
-    /// Total message length must be 65535 bytes or less.
-    /// Alice and Bob will use the padding data in the KDF for message 3 part 1.
-    /// It is authenticated so that any tampering will cause the
-    /// next message to fail.
-    pub fn padding(&self) -> &[u8] {
-        &self.buf[48..]
-    }
-}
-
-impl From<Vec<u8>> for SessionCreated {
-    fn from(buf: Vec<u8>) -> Self {
-        Self { buf }
-    }
-}
-
-impl Display for SessionCreated {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(
-            format!(
-                "SessionCreated (y: {}, options: {}, padding: {})",
-                base64::encode(self.y()),
-                self.options(),
-                base64::encode(self.padding())
-            )
-            .as_str(),
-        )?;
-
-        Ok(())
-    }
-}
-
-/// +----+----+----+----+----+----+----+----+
 /// | Rsvd(0) | padLen  |   Reserved (0)    |
 /// +----+----+----+----+----+----+----+----+
 /// |        tsB        |   Reserved (0)    |
 /// +----+----+----+----+----+----+----+----+
-pub struct Options([u8; 16]);
+pub struct SessionCreated([u8; 16]);
 
-impl Options {
+impl SessionCreated {
     /// Reserved :: 10 bytes total, set to 0 for compatibility with future options
     pub fn reserved(&self) -> [u8; 10] {
         [&self.0[0..2], &self.0[4..8], &self.0[12..16]]
@@ -100,13 +29,13 @@ impl Options {
     }
 }
 
-impl From<[u8; 16]> for Options {
+impl From<[u8; 16]> for SessionCreated {
     fn from(buf: [u8; 16]) -> Self {
         Self(buf)
     }
 }
 
-impl TryFrom<&[u8]> for Options {
+impl TryFrom<&[u8]> for SessionCreated {
     type Error = TryFromSliceError;
 
     fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
@@ -114,11 +43,11 @@ impl TryFrom<&[u8]> for Options {
     }
 }
 
-impl Display for Options {
+impl Display for SessionCreated {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(
             format!(
-                "Options (pad_len: {}, ts_b: {})",
+                "SessionCreated (pad_len: {}, ts_b: {})",
                 self.pad_len(),
                 self.ts_b()
             )

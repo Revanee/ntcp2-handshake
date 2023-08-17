@@ -27,13 +27,15 @@ use std::{
     net::TcpStream,
 };
 
-use self::session_request::Options;
+use self::session_request::SessionRequest;
 
 pub mod session_confirmed;
 pub mod session_created;
 pub mod session_request;
 
 pub const NTCP2_NOISE_ID: &str = "Noise_XKaesobfse+hs2+hs3_25519_ChaChaPoly_SHA256";
+const SESSION_CREATED_FRAME_LEN: usize = 64;
+const SESSION_REQUEST_FRAME_LEN: usize = 64;
 
 pub fn initiator_handshake(
     own_public_key: [u8; 32],
@@ -67,10 +69,10 @@ pub fn initiator_handshake(
         // TODO: Random padding
         let padding = [1, 2, 3];
 
-        let session_request_constant_length = crate::ntcp2::session_request::SessionRequest::len();
-        let options = Options::new(2, padding.len() as u16, router_info.len() as u16 + 16, 0);
+        let options =
+            SessionRequest::new(2, padding.len() as u16, router_info.len() as u16 + 16, 0);
 
-        let mut message_buffer = vec![0u8; session_request_constant_length];
+        let mut message_buffer = vec![0u8; SESSION_REQUEST_FRAME_LEN];
         noise.write_message(options.as_bytes(), &mut message_buffer);
         message_buffer.extend_from_slice(&padding);
         noise.set_h2(padding.into());
@@ -81,15 +83,15 @@ pub fn initiator_handshake(
 
     // Receive SessionCreated
     {
-        let session_created_frame_len = crate::ntcp2::session_created::SessionCreated::len();
-        let session_created_frame = recv(peer_stream, session_created_frame_len)
+        let session_created_frame = recv(peer_stream, SESSION_CREATED_FRAME_LEN)
             .expect("failed to receive session created");
 
         let mut message_buffer = vec![0u8; 16];
         noise.read_message(&session_created_frame, &mut message_buffer);
 
         let session_created_options =
-            crate::ntcp2::session_created::Options::try_from(message_buffer.as_slice()).unwrap();
+            crate::ntcp2::session_created::SessionCreated::try_from(message_buffer.as_slice())
+                .unwrap();
 
         println!("Received SessionCreated: {}", session_created_options);
 
@@ -97,7 +99,7 @@ pub fn initiator_handshake(
         let session_created_padding_frame =
             recv(peer_stream, session_created_padding_len).expect("failed to receive padding");
         println!(
-            "Received session_created_padding: {:?}",
+            "Received SessionCreated padding: {:?}",
             session_created_padding_frame
         );
         noise.set_h3(session_created_padding_frame);

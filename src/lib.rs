@@ -170,8 +170,8 @@ mod tests {
     const TEST_ROUTER_IDENTITY: &str =
         "OjlrJgYiBXkPlLR9UkCoIdGJY8DcftjwCmL3PWiIdWhF66ww8nBJL8Pk44+Y+pUGkOv/oZasPd+ejRlhk9nHi0XrrDDycEkvw+Tjj5j6lQaQ6/+hlqw9356NGWGT2ceLReusMPJwSS/D5OOPmPqVBpDr/6GWrD3fno0ZYZPZx4tF66ww8nBJL8Pk44+Y+pUGkOv/oZasPd+ejRlhk9nHi0XrrDDycEkvw+Tjj5j6lQaQ6/+hlqw9356NGWGT2ceLReusMPJwSS/D5OOPmPqVBpDr/6GWrD3fno0ZYZPZx4tF66ww8nBJL8Pk44+Y+pUGkOv/oZasPd+ejRlhk9nHi0XrrDDycEkvw+Tjj5j6lQaQ6/+hlqw9356NGWGT2ceLReusMPJwSS/D5OOPmPqVBpDr/6GWrD3fno0ZYZPZx4tF66ww8nBJL8Pk44+Y+pUGkOv/oZasPd+ejRlhk9nHixeT6yvbOQ77PWve7h3vOyebYGVEYZ6wwbfKnVw/hk45BQAEAAcABAAAAYnpCqoMAg4AAAAAAAAAAAVOVENQMgBABGNhcHM9ATQ7AXM9LFdZQnA2OEdocUVOV2s3TX44Tk41THMxVUU1c0J5Sn5ZaDhaVzB6M3AwUVE9OwF2PQEyOw8AAAAAAAAAAARTU1UyAXwEY2Fwcz0BNDsBaT0sfm5KblRCSHVyZmhuZzBBdTdoM0QwUHNDVjNtRXdvajIxM3huOFVZekF4TT07BWlleHAwPQoxNjkxODM2NzIyOwVpZXhwMT0KMTY5MTgzNjcwNzsFaWV4cDI9CjE2OTE4MzY3MDc7A2loMD0sYmxIby0wZHhGMllSb05LQW90SVdGeHltRjczV0h5dUdZbXBVUnc4WTF5MD07A2loMT0sfmF1MmplNGxFbmtFZnJCdGhJeWljT2d1Y2ZYSmVEa2p4WEJGY1IxMkI3Yz07A2loMj0sZU83T2Y2QlRqcjBGM3czbnVWbThxUkUyMDVqfmVFZzllcGRvNXVFVWFMWT07BWl0YWcwPQo0MDAzNDU1MDk4OwVpdGFnMT0KMzkyMzMwMDEyODsFaXRhZzI9CjIyODgxNTE2MjU7AXM9LExZbVBGTmxRNH5nOGtpdjZ5OE9MR1ZXd2VWNndvMU1pamsxWmpjNk1hazg9OwF2PQEyOwAALARjYXBzPQJMVTsFbmV0SWQ9ATI7DnJvdXRlci52ZXJzaW9uPQYwLjkuNTk75wElj2dF2Qhokil5YH4t768xImr9e49BY8n040W4HAhc2SjzfCqRv6GYThkGOlkjEa6NDcTo04DLpQlB2Xf4BA==";
 
-    fn test_options() -> crate::ntcp2::session_request::Options {
-        crate::ntcp2::session_request::Options::new(0, 16, 128, 0)
+    fn test_options() -> crate::ntcp2::session_request::SessionRequest {
+        crate::ntcp2::session_request::SessionRequest::new(0, 16, 128, 0)
     }
 
     struct TestData {
@@ -262,7 +262,8 @@ mod tests {
     #[test]
     fn options_encoding_and_decoding() {
         let expected_options_bytes = get_test_data().session_request_options;
-        let expectes_options = crate::ntcp2::session_request::Options::from(expected_options_bytes);
+        let expectes_options =
+            crate::ntcp2::session_request::SessionRequest::from(expected_options_bytes);
 
         assert_eq!(
             expectes_options.to_bytes(),
@@ -376,7 +377,7 @@ mod tests {
         {
             let router_info = base64::decode(TEST_ROUTER_IDENTITY).unwrap();
             let padding = [5, 4, 3, 2, 1];
-            let options = crate::ntcp2::session_request::Options::new(
+            let options = crate::ntcp2::session_request::SessionRequest::new(
                 2,
                 padding.len() as u16,
                 router_info.len() as u16 + 16,
@@ -427,7 +428,7 @@ mod tests {
 
             println!("Received noise message: {:?}", message_buffer);
             let session_created_options =
-                crate::ntcp2::session_created::Options::from(message_buffer);
+                crate::ntcp2::session_created::SessionCreated::from(message_buffer);
 
             println!(
                 "Received SessionCreated options: {}",
