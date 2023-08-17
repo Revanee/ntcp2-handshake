@@ -91,10 +91,7 @@ pub fn initiator_handshake(
         let session_created_options =
             crate::ntcp2::session_created::Options::try_from(message_buffer.as_slice()).unwrap();
 
-        println!(
-            "Received SessionCreated options: {}",
-            session_created_options
-        );
+        println!("Received SessionCreated: {}", session_created_options);
 
         let session_created_padding_len = session_created_options.pad_len() as usize;
         let session_created_padding_frame =
@@ -108,14 +105,16 @@ pub fn initiator_handshake(
 
     // Send SessionConfirmed
     {
+        println!("Sending SessionConfirmed: {:?}", router_info);
         const NTCP2_MTU: usize = 65535;
         let mut message_buffer = vec![0u8; NTCP2_MTU];
         noise.write_message(router_info, &mut message_buffer);
         send(peer_stream, &message_buffer);
     }
+
+    println!("Handshake complete!");
 }
 
-/// Hyper-basic stream transport receiver. 16-bit BE size followed by payload.
 fn recv(stream: &mut TcpStream, len: usize) -> std::io::Result<Vec<u8>> {
     println!("Receiving message of length {}...", len);
     let mut msg = vec![0u8; len];
@@ -125,7 +124,6 @@ fn recv(stream: &mut TcpStream, len: usize) -> std::io::Result<Vec<u8>> {
     Ok(msg)
 }
 
-/// Hyper-basic stream transport sender. 16-bit BE size followed by payload.
 fn send(stream: &mut TcpStream, buf: &[u8]) {
     stream.write_all(buf).unwrap();
 }

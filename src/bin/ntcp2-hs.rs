@@ -48,12 +48,6 @@ fn main() {
             peer_router_hash,
             peer_iv,
         } => {
-            let keypair = ntcp2_hs::noise::suite::Ntcp2NoiseSuite::generate_keypair();
-            println!("Generated public key: {}", hex::encode(keypair.public));
-            println!("Connecting to {}:{}", host, port);
-            let mut peer_stream = TcpStream::connect(format!("{}:{}", host, port))
-                .expect("Failed to connect to peer");
-
             let b64 = base64::engine::general_purpose::STANDARD;
             let peer_public_key = b64
                 .decode(peer_public_key)
@@ -62,6 +56,12 @@ fn main() {
                 .decode(peer_router_hash)
                 .expect("Failed to decode router hash");
             let peer_iv = b64.decode(peer_iv).expect("Failed to decode IV");
+
+            let keypair = ntcp2_hs::noise::suite::Ntcp2NoiseSuite::generate_keypair();
+            println!("Generated public key: {}", hex::encode(keypair.public));
+            println!("Connecting to {}:{}", host, port);
+            let mut peer_stream = TcpStream::connect(format!("{}:{}", host, port))
+                .expect("Failed to connect to peer");
 
             initiator_handshake(
                 keypair.public,
